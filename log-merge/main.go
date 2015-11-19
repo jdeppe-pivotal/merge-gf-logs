@@ -25,6 +25,8 @@ type LogLine struct {
 	text  string
 }
 
+var MAX_INT int64 = int64(^uint64(0) >> 1)
+
 var stampFormat = "2006/01/02 15:04:05.000 MST"
 var cpuProfile = flag.String("cpuprofile", "", "write cpu profile to file")
 var logs []LogFile
@@ -73,7 +75,10 @@ func main() {
 		logs = append(logs, LogFile{alias: alias, scanner: bufio.NewScanner(f)})
 	}
 
+	var oldestStampSeen int64
+
 	for len(logs) > 0 {
+		oldestStampSeen = MAX_INT
 		// Process log list backwards so that we can delete entries as necessary
 		for i := len(logs) - 1; i >= 0; i-- {
 			if logs[i].scanner.Scan() {
@@ -86,6 +91,10 @@ func main() {
 					if err != nil {
 						log.Printf("Unable to parse date stamp '%s': %s", stamp, err)
 						continue
+					}
+
+					if t.UnixNano() < oldestStampSeen {
+						oldestStampSeen = t.UnixNano()
 					}
 
 					l := &LogLine{alias: logs[i].alias, uTime: t.UnixNano(), text: line}
@@ -119,14 +128,21 @@ func main() {
 				logs = append(logs[:i], logs[i + 1:]...)
 			}
 		}
+
+		flushLogs(oldestStampSeen, aggLog)
 	}
-	dump(aggLog)
+	flushLogs(MAX_INT, aggLog)
 }
 
-func dump(aggLog *list.List) {
+func flushLogs(highestStamp int64, aggLog *list.List) {
 	for e := aggLog.Front(); e != nil; e = e.Next() {
 		line, _ := e.Value.(*LogLine)
-		fmt.Printf("[%s] %s\n", line.alias, line.text)
+		if line.uTime < highestStamp {
+			fmt.Printf("[%s] %s\n", line.alias, line.text)
+			aggLog.Remove(e)
+		} else {
+			break
+		}
 	}
 }
 
