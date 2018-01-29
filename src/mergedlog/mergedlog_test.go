@@ -119,6 +119,7 @@ var _ = Describe("adding lines", func() {
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
 			line2 := &mergedlog.LogLine{UTime: 1, Text: "line 2"}
 			line3 := &mergedlog.LogLine{UTime: 2, Text: "line 3"}
+
 			r := log1.Insert(line2)
 			Expect(r.Value).To(Equal(line2))
 			r = log2.Insert(line1)
@@ -134,18 +135,18 @@ var _ = Describe("adding lines", func() {
 			r = log2.InsertTimeless("line 5")
 			Expect(r.Value).To(Equal(line5))
 
-//			mergedlog.Dump(aggLog)
+			//mergedlog.Dump(aggLog)
 
 			line := aggLog.Front()
 			Expect(line.Value).To(Equal(line1))
 			line = line.Next()
-			Expect(line.Value).To(Equal(&mergedlog.LogLine{UTime: 1, Text: "line 5"}))
+			Expect(line.Value).To(Equal(line5))
 			line = line.Next()
 			Expect(line.Value).To(Equal(line2))
 			line = line.Next()
 			Expect(line.Value).To(Equal(line3))
 			line = line.Next()
-			Expect(line.Value).To(Equal(&mergedlog.LogLine{UTime: 2, Text: "line 4"}))
+			Expect(line.Value).To(Equal(line4))
 		})
 	})
 })
