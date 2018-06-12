@@ -10,19 +10,43 @@ import (
 	"os"
 	"bufio"
 	"time"
+	"github.com/mgutz/ansi"
 	"fmt"
 )
 
-var MAX_INT int64 = int64(^uint64(0) >> 1)
-var FLUSH_BATCH_SIZE int = 1000
+var MAX_INT = int64(^uint64(0) >> 1)
+var FLUSH_BATCH_SIZE = 1000
 
 var stampFormat = "2006/01/02 15:04:05.000 MST"
 var logs mergedlog.LogCollection
 var aggLog *list.List
-var lineCount int = 0
+var lineCount = 0
+
+var palette [8]string
+var resetColor string
+var userColor string
+
+func init() {
+	resetColor = ansi.ColorCode("reset")
+
+	// Taken from the Solarized color palette
+	palette[0] = ansi.ColorCode("253") // whiteish
+	palette[1] = ansi.ColorCode("64")  // green
+	palette[2] = ansi.ColorCode("37")  // cyan
+	palette[3] = ansi.ColorCode("33")  // blue
+	palette[4] = ansi.ColorCode("61")  // violet
+	palette[5] = ansi.ColorCode("125") // magenta
+	palette[6] = ansi.ColorCode("160") // red
+	palette[7] = ansi.ColorCode("166") // orange
+}
 
 func main() {
+	flag.StringVar(&userColor, "color", "dark", "Color scheme to use: light, dark or off")
 	flag.Parse()
+
+	if userColor == "light" {
+		palette[0] = ansi.ColorCode("234") // blackish
+	}
 
 	gfeLogLineRE, err := regexp.Compile(`^\[\w+ (([^ ]* ){3}).*`)
 	if err != nil {
@@ -30,6 +54,9 @@ func main() {
 	}
 
 	aggLog = list.New()
+	colorIndex := 0
+
+	logs = mergedlog.NewLogCollection(len(flag.Args()))
 
 	var logName, alias string
 	// Gather our files and set up a Scanner for each of them
@@ -41,7 +68,7 @@ func main() {
 		if len(parts) == 1 {
 			logName = parts[0]
 			bits := strings.Split(logName, "/")
-			alias = bits[len(bits) - 1]
+			alias = bits[len(bits)-1]
 		} else {
 			logName = parts[1]
 		}
@@ -52,7 +79,8 @@ func main() {
 		}
 		defer f.Close()
 
-		logs = append(logs, mergedlog.LogFile{Alias: alias, Scanner: bufio.NewScanner(f), AggLog: aggLog})
+		logs = append(logs, mergedlog.LogFile{Alias: alias, Scanner: bufio.NewScanner(f), AggLog: aggLog, Color: palette[colorIndex]})
+		colorIndex = (colorIndex + 1) % 8
 	}
 
 	var oldestStampSeen int64 = MAX_INT
@@ -75,7 +103,7 @@ func main() {
 					}
 					lastTimeRead = t.UnixNano()
 
-					l := &mergedlog.LogLine{Alias: logs[i].Alias, UTime: t.UnixNano(), Text: line}
+					l := &mergedlog.LogLine{Alias: logs[i].Alias, UTime: t.UnixNano(), Text: line, Color: logs[i].Color}
 					logs[i].Insert(l)
 				} else {
 					x := logs[i].InsertTimeless(line)
@@ -88,11 +116,11 @@ func main() {
 				}
 
 			} else {
-				logs = append(logs[:i], logs[i + 1:]...)
+				logs = append(logs[:i], logs[i+1:]...)
 			}
 		}
 
-		if lineCount % FLUSH_BATCH_SIZE == 0 {
+		if lineCount%FLUSH_BATCH_SIZE == 0 {
 			flushLogs(oldestStampSeen, aggLog)
 			oldestStampSeen = MAX_INT
 		}
@@ -105,7 +133,11 @@ func flushLogs(highestStamp int64, aggLog *list.List) {
 	for e := aggLog.Front(); e != nil; e = aggLog.Front() {
 		line, _ := e.Value.(*mergedlog.LogLine)
 		if line.UTime < highestStamp {
-			fmt.Printf("[%s] %s\n", line.Alias, line.Text)
+			if userColor != "off" {
+				fmt.Println(line.Color, fmt.Sprintf("[%s] %s", line.Alias, line.Text), resetColor)
+			} else {
+				fmt.Printf("[%s] %s\n", line.Alias, line.Text)
+			}
 			aggLog.Remove(e)
 		} else {
 			break

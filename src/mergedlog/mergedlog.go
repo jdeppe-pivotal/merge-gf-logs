@@ -3,13 +3,14 @@ package mergedlog
 import (
 	"bufio"
 	"container/list"
-    "fmt"
+	"fmt"
 )
 
 type LogFile struct {
 	Alias    string
 	Scanner  *bufio.Scanner
 	AggLog   *list.List
+	Color    string
 	lastLine *list.Element
 }
 
@@ -17,15 +18,16 @@ type LogLine struct {
 	Alias string
 	UTime int64
 	Text  string
+	Color string
 }
 
 type LogCollection []LogFile
 
 func NewLogCollection(size int) LogCollection {
-	return make([]LogFile, size)
+	return make([]LogFile, 0, size)
 }
 
-func (this *LogCollection) AddLog(file *LogFile) {
+func (this *LogCollection) AddLogs(file *LogFile) {
 	*this = append(*this, *file)
 }
 
@@ -59,10 +61,10 @@ func (this *LogFile) Insert(line *LogLine) *list.Element {
 func (this *LogFile) InsertTimeless(line string) *list.Element {
 	if this.lastLine != nil {
 		last, _ := this.lastLine.Value.(*LogLine)
-		l := &LogLine{Alias: last.Alias, UTime: last.UTime, Text: line}
+		l := &LogLine{Alias: last.Alias, UTime: last.UTime, Text: line, Color: last.Color}
 		this.lastLine = this.AggLog.InsertAfter(l, this.lastLine)
 	} else {
-		l := &LogLine{Alias: this.Alias, UTime: 0, Text: line}
+		l := &LogLine{Alias: this.Alias, UTime: 0, Text: line, Color: this.Color}
 		this.lastLine = this.AggLog.PushFront(l)
 	}
 
