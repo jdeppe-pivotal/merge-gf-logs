@@ -22,8 +22,15 @@ For example:
 
 Each file can be assigned a 'tag' which is used in the output to identify where the line originated. By default the filename is used as the tag.
 
+Output is colored by default from a simple palette of 8 colors. Coloring can be controlled using the `--color` switch. Options are `off`, `light` and `dark` (default).
+
 ### Building
 
-Should simply be:
+The build vendors its dependencies with `dep` (`brew install dep`). Once that is installed, building should simply be:
 
-    go build -o ml ./src/cmd/main.go
+    # Update/get dependencies if this is the first time here
+    cd src/merge-logs
+    dep ensure
+    cd -
+    # Actually do the build
+    go build -o ml merge-logs
