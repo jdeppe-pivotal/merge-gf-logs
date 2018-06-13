@@ -1,10 +1,10 @@
-package mergedlog
+package mergedlog_test
 
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"container/list"
-	"merge-logs/mergedlogs/mergedlog"
+	"merge-logs/mergedlog"
 )
 
 var _ = Describe("adding lines", func() {

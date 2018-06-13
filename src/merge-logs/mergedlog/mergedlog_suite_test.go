@@ -1,4 +1,4 @@
-package mergedlog
+package mergedlog_test
 
 import (
 	. "github.com/onsi/ginkgo"
