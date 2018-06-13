@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"mergedlog"
+	"merge-logs/mergedlog"
 	"container/list"
 	"regexp"
 	"log"
