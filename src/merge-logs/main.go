@@ -12,6 +12,7 @@ import (
 	"time"
 	"github.com/mgutz/ansi"
 	"fmt"
+	"strconv"
 )
 
 var MAX_INT = int64(^uint64(0) >> 1)
@@ -58,6 +59,7 @@ func main() {
 
 	logs = mergedlog.NewLogCollection(len(flag.Args()))
 
+	maxLogNameLength := 0
 	var logName, alias string
 	// Gather our files and set up a Scanner for each of them
 	for _, logTagName := range (flag.Args()) {
@@ -81,6 +83,10 @@ func main() {
 
 		logs = append(logs, mergedlog.LogFile{Alias: alias, Scanner: bufio.NewScanner(f), AggLog: aggLog, Color: palette[colorIndex]})
 		colorIndex = (colorIndex + 1) % 8
+
+		if len(alias) > maxLogNameLength {
+			maxLogNameLength = len(alias)
+		}
 	}
 
 	var oldestStampSeen int64 = MAX_INT
@@ -121,22 +127,23 @@ func main() {
 		}
 
 		if lineCount%FLUSH_BATCH_SIZE == 0 {
-			flushLogs(oldestStampSeen, aggLog)
+			flushLogs(oldestStampSeen, aggLog, maxLogNameLength)
 			oldestStampSeen = MAX_INT
 		}
 	}
 
-	flushLogs(MAX_INT, aggLog)
+	flushLogs(MAX_INT, aggLog, maxLogNameLength)
 }
 
-func flushLogs(highestStamp int64, aggLog *list.List) {
+func flushLogs(highestStamp int64, aggLog *list.List, maxLogNameLength int) {
 	for e := aggLog.Front(); e != nil; e = aggLog.Front() {
 		line, _ := e.Value.(*mergedlog.LogLine)
 		if line.UTime < highestStamp {
+			format := "%s%" + strconv.Itoa(len(line.Alias) - maxLogNameLength) + "s[%s] %s%s\n"
 			if userColor != "off" {
-				fmt.Println(line.Color, fmt.Sprintf("[%s] %s", line.Alias, line.Text), resetColor)
+				fmt.Printf(format, line.Color,  "", line.Alias, line.Text, resetColor)
 			} else {
-				fmt.Printf("[%s] %s\n", line.Alias, line.Text)
+				fmt.Printf(format, "", "", line.Alias, line.Text, "")
 			}
 			aggLog.Remove(e)
 		} else {
