@@ -44,7 +44,23 @@ func init() {
 
 func main() {
 	flag.StringVar(&userColor, "color", "dark", "Color scheme to use: light, dark or off")
+	duration := flag.Int64("duration", MAX_INT, "start of range of logs")
+	rangeStopStr := flag.String("stop", "", "start of range of logs")
 	flag.Parse()
+
+	rangeStop := MAX_INT
+	if *rangeStopStr != "" {
+		t, err := time.Parse(stampFormat, *rangeStopStr)
+		if err != nil {
+			log.Fatalf("Unable to parse '%s' as timestamp", rangeStopStr)
+		}
+		rangeStop = t.UnixNano()
+		// if duration is larger than the stop time, adjust it so that start
+		// time is positive
+		if *duration > t.Unix() {
+			*duration = t.Unix()
+		}
+	}
 
 	if userColor == "light" {
 		palette[0] = ansi.ColorCode("234") // blackish
@@ -82,10 +98,16 @@ func main() {
 		}
 		defer f.Close()
 
-		scanner := bufio.NewScanner(f)
-		scanner.Split(mergedlog.ScanLogEntries)
-
-		logs = append(logs, mergedlog.LogFile{Alias: alias, Scanner: scanner, AggLog: aggLog, Color: palette[colorIndex]})
+		logFile := mergedlog.LogFile{
+			Alias:      alias,
+			Scanner:    bufio.NewScanner(f),
+			AggLog:     aggLog,
+			Color:      palette[colorIndex],
+			RangeStart: rangeStop - int64(time.Duration(*duration)*time.Second),
+			RangeStop:  rangeStop,
+		}
+		logFile.Scanner.Split(mergedlog.ScanLogEntries)
+		logs = append(logs, logFile)
 		colorIndex = (colorIndex + 1) % 8
 
 		if len(alias) > maxLogNameLength {
@@ -116,9 +138,10 @@ func main() {
 					l := &mergedlog.LogLine{Alias: logs[i].Alias, UTime: t.UnixNano(), Text: line, Color: logs[i].Color}
 					logs[i].Insert(l)
 				} else {
-					x := logs[i].InsertTimeless(line)
-					v, _ := x.Value.(*mergedlog.LogLine)
-					lastTimeRead = v.UTime
+					if x := logs[i].InsertTimeless(line); x != nil {
+						v, _ := x.Value.(*mergedlog.LogLine)
+						lastTimeRead = v.UTime
+					}
 				}
 
 				if lastTimeRead < oldestStampSeen {
