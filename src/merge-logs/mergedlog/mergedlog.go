@@ -2,6 +2,7 @@ package mergedlog
 
 import (
 	"bufio"
+	"bytes"
 	"container/list"
 	"fmt"
 )
@@ -60,6 +61,8 @@ func (this *LogFile) Insert(line *LogLine) *list.Element {
 
 func (this *LogFile) InsertTimeless(line string) *list.Element {
 	if this.lastLine != nil {
+		// this should not happen with the custom scan function
+		// TODO return element and error
 		last, _ := this.lastLine.Value.(*LogLine)
 		l := &LogLine{Alias: last.Alias, UTime: last.UTime, Text: line, Color: last.Color}
 		this.lastLine = this.AggLog.InsertAfter(l, this.lastLine)
@@ -76,4 +79,24 @@ func Dump(agg *list.List) {
 		x, _ := v.Value.(*LogLine)
 		fmt.Printf(">>> %+v\n", x)
 	}
+}
+
+func ScanLogEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	if i := bytes.Index(data, []byte("\n[")); i >= 0 {
+		// We have a full newline-terminated line.
+		return i + 1, bytes.TrimRight(data[0:i], "\r"), nil
+	}
+
+	// If we're at EOF, we have a final, non-terminated line. Return it,
+	// dropping the trailing newline.
+	if atEOF {
+		return len(data), bytes.TrimRight(data[0:len(data)-1], "\r\n"), nil
+	}
+
+	// Request more data.
+	return 0, nil, nil
 }
