@@ -1,17 +1,24 @@
 package mergedlog_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 	"container/list"
 	"merge-logs/mergedlog"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
+
+const MAX_INT = int64(^uint64(0) >> 1)
 
 var _ = Describe("adding lines", func() {
 	Context("using a single file", func() {
 		It("adding one line", func() {
 			aggLog := list.New()
-			log := &mergedlog.LogFile{AggLog: aggLog}
+			log := &mergedlog.LogFile{
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  MAX_INT,
+			}
 
 			line := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
 			log.Insert(line)
@@ -21,7 +28,11 @@ var _ = Describe("adding lines", func() {
 
 		It("adding 2 lines in order", func() {
 			aggLog := list.New()
-			log := &mergedlog.LogFile{AggLog: aggLog}
+			log := &mergedlog.LogFile{
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  MAX_INT,
+			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
 			line2 := &mergedlog.LogLine{UTime: 1, Text: "line 2"}
@@ -34,7 +45,11 @@ var _ = Describe("adding lines", func() {
 
 		It("adding 2 lines out of order", func() {
 			aggLog := list.New()
-			log := &mergedlog.LogFile{AggLog: aggLog}
+			log := &mergedlog.LogFile{
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  MAX_INT,
+			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
 			line2 := &mergedlog.LogLine{UTime: 1, Text: "line 2"}
@@ -47,7 +62,11 @@ var _ = Describe("adding lines", func() {
 
 		It("adding 3 lines out of order", func() {
 			aggLog := list.New()
-			log := &mergedlog.LogFile{AggLog: aggLog}
+			log := &mergedlog.LogFile{
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  MAX_INT,
+			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
 			line2 := &mergedlog.LogLine{UTime: 1, Text: "line 2"}
@@ -66,7 +85,11 @@ var _ = Describe("adding lines", func() {
 
 		It("adding lines with the same time", func() {
 			aggLog := list.New()
-			log := &mergedlog.LogFile{AggLog: aggLog}
+			log := &mergedlog.LogFile{
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  MAX_INT,
+			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
 			line2 := &mergedlog.LogLine{UTime: 1, Text: "line 2"}
@@ -82,13 +105,70 @@ var _ = Describe("adding lines", func() {
 			line = line.Next()
 			Expect(line.Value).To(Equal(line3))
 		})
+
+		It("only retains lines within the range", func() {
+			aggLog := list.New()
+			log := &mergedlog.LogFile{
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  1,
+			}
+
+			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
+			line2 := &mergedlog.LogLine{UTime: 1, Text: "line 2"}
+			line3 := &mergedlog.LogLine{UTime: 2, Text: "line 3"}
+
+			log.Insert(line2)
+			log.Insert(line1)
+			log.Insert(line3)
+
+			line := aggLog.Front()
+			Expect(line.Value).To(Equal(line1))
+			line = line.Next()
+			Expect(line.Value).To(Equal(line2))
+			Expect(line.Next()).To(BeNil())
+		})
+
+		It("adding timeless as the first line", func() {
+			aggLog := list.New()
+			log := &mergedlog.LogFile{
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  MAX_INT,
+			}
+
+			log.InsertTimeless("line")
+			line := aggLog.Front()
+			Expect(line.Value).To(Equal(&mergedlog.LogLine{UTime: 0, Text: "line"}))
+		})
+
+		It("adding timeless as the first line with non-zero start", func() {
+			aggLog := list.New()
+			log := &mergedlog.LogFile{
+				AggLog:     aggLog,
+				RangeStart: 1,
+				RangeStop:  MAX_INT,
+			}
+
+			log.InsertTimeless("line")
+			line := aggLog.Front()
+			Expect(line).Should(BeNil())
+		})
 	})
 
 	Context("Using 2 files", func() {
 		It("works add one line from each file", func() {
 			aggLog := list.New()
-			log1 := &mergedlog.LogFile{AggLog: aggLog}
-			log2 := &mergedlog.LogFile{AggLog: aggLog}
+			log1 := &mergedlog.LogFile{
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  MAX_INT,
+			}
+			log2 := &mergedlog.LogFile{
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  MAX_INT,
+			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
 			line2 := &mergedlog.LogLine{UTime: 1, Text: "line 2"}
@@ -113,8 +193,18 @@ var _ = Describe("adding lines", func() {
 	Context("Using 2 files", func() {
 		It("works adding a timeless line from each file", func() {
 			aggLog := list.New()
-			log1 := &mergedlog.LogFile{Alias: "vm1", AggLog: aggLog}
-			log2 := &mergedlog.LogFile{Alias: "vm2", AggLog: aggLog}
+			log1 := &mergedlog.LogFile{
+				Alias:      "vm1",
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  MAX_INT,
+			}
+			log2 := &mergedlog.LogFile{
+				Alias:      "vm2",
+				AggLog:     aggLog,
+				RangeStart: 0,
+				RangeStop:  MAX_INT,
+			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
 			line2 := &mergedlog.LogLine{UTime: 1, Text: "line 2"}

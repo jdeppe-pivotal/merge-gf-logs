@@ -8,11 +8,13 @@ import (
 )
 
 type LogFile struct {
-	Alias    string
-	Scanner  *bufio.Scanner
-	AggLog   *list.List
-	Color    string
-	lastLine *list.Element
+	Alias      string
+	Scanner    *bufio.Scanner
+	AggLog     *list.List
+	Color      string
+	lastLine   *list.Element
+	RangeStart int64
+	RangeStop  int64
 }
 
 type LogLine struct {
@@ -34,6 +36,10 @@ func (this *LogCollection) AddLogs(file *LogFile) {
 
 func (this *LogFile) Insert(line *LogLine) *list.Element {
 	line.Alias = this.Alias
+
+	if line.UTime < this.RangeStart || this.RangeStop < line.UTime {
+		return nil
+	}
 
 	if this.lastLine == nil {
 		if this.AggLog.Len() == 0 {
@@ -66,12 +72,15 @@ func (this *LogFile) InsertTimeless(line string) *list.Element {
 		last, _ := this.lastLine.Value.(*LogLine)
 		l := &LogLine{Alias: last.Alias, UTime: last.UTime, Text: line, Color: last.Color}
 		this.lastLine = this.AggLog.InsertAfter(l, this.lastLine)
-	} else {
+		return this.lastLine
+	} else if this.RangeStart == 0 {
 		l := &LogLine{Alias: this.Alias, UTime: 0, Text: line, Color: this.Color}
 		this.lastLine = this.AggLog.PushFront(l)
+
+		return this.lastLine
 	}
 
-	return this.lastLine
+	return nil
 }
 
 func Dump(agg *list.List) {
