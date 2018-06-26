@@ -1,18 +1,19 @@
 package main
 
 import (
-	"flag"
-	"merge-logs/mergedlog"
-	"container/list"
-	"regexp"
-	"log"
-	"strings"
-	"os"
 	"bufio"
-	"time"
-	"github.com/mgutz/ansi"
+	"container/list"
+	"flag"
 	"fmt"
+	"log"
+	"merge-logs/mergedlog"
+	"os"
+	"regexp"
 	"strconv"
+	"strings"
+	"time"
+
+	"github.com/mgutz/ansi"
 )
 
 var MAX_INT = int64(^uint64(0) >> 1)
@@ -62,7 +63,7 @@ func main() {
 	maxLogNameLength := 0
 	var logName, alias string
 	// Gather our files and set up a Scanner for each of them
-	for _, logTagName := range (flag.Args()) {
+	for _, logTagName := range flag.Args() {
 		parts := strings.Split(logTagName, ":")
 		alias = parts[0]
 
@@ -81,7 +82,10 @@ func main() {
 		}
 		defer f.Close()
 
-		logs = append(logs, mergedlog.LogFile{Alias: alias, Scanner: bufio.NewScanner(f), AggLog: aggLog, Color: palette[colorIndex]})
+		scanner := bufio.NewScanner(f)
+		scanner.Split(mergedlog.ScanLogEntries)
+
+		logs = append(logs, mergedlog.LogFile{Alias: alias, Scanner: scanner, AggLog: aggLog, Color: palette[colorIndex]})
 		colorIndex = (colorIndex + 1) % 8
 
 		if len(alias) > maxLogNameLength {
@@ -137,13 +141,15 @@ func main() {
 
 func flushLogs(highestStamp int64, aggLog *list.List, maxLogNameLength int) {
 	for e := aggLog.Front(); e != nil; e = aggLog.Front() {
-		line, _ := e.Value.(*mergedlog.LogLine)
-		if line.UTime < highestStamp {
-			format := "%s%" + strconv.Itoa(len(line.Alias) - maxLogNameLength) + "s[%s] %s%s\n"
-			if userColor != "off" {
-				fmt.Printf(format, line.Color,  "", line.Alias, line.Text, resetColor)
-			} else {
-				fmt.Printf(format, "", "", line.Alias, line.Text, "")
+		entry, _ := e.Value.(*mergedlog.LogLine)
+		if entry.UTime < highestStamp {
+			format := "%s%" + strconv.Itoa(len(entry.Alias)-maxLogNameLength) + "s[%s] %s%s\n"
+			for _, line := range strings.Split(entry.Text, "\n") {
+				if userColor != "off" {
+					fmt.Printf(format, entry.Color, "", entry.Alias, line, resetColor)
+				} else {
+					fmt.Printf(format, "", "", entry.Alias, line, "")
+				}
 			}
 			aggLog.Remove(e)
 		} else {

@@ -149,4 +149,34 @@ var _ = Describe("adding lines", func() {
 			Expect(line.Value).To(Equal(line4))
 		})
 	})
+
+	Context("Custom scan function", func() {
+		It("works at the end of a reader with no data", func() {
+			advance, token, err := mergedlog.ScanLogEntries([]byte{}, true)
+			Expect(advance).Should(Equal(0))
+			Expect(token).Should(Equal([]byte{}))
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("works at the end of a reader with data", func() {
+			advance, token, err := mergedlog.ScanLogEntries([]byte("line\n"), true)
+			Expect(advance).Should(Equal(5))
+			Expect(token).Should(Equal([]byte("line")))
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("requests more data when sep is no present", func() {
+			advance, token, err := mergedlog.ScanLogEntries([]byte("line"), false)
+			Expect(advance).Should(Equal(0))
+			Expect(token).Should(BeNil())
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("requests more data when sep is no present", func() {
+			advance, token, err := mergedlog.ScanLogEntries([]byte("line\n["), false)
+			Expect(advance).Should(Equal(5))
+			Expect(token).Should(Equal([]byte("line")))
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+	})
 })
