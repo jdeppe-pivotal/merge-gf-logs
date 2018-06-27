@@ -8,8 +8,6 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const MAX_INT = int64(^uint64(0) >> 1)
-
 var _ = Describe("adding lines", func() {
 	Context("using a single file", func() {
 		It("adding one line", func() {
@@ -17,7 +15,7 @@ var _ = Describe("adding lines", func() {
 			log := &mergedlog.LogFile{
 				AggLog:     aggLog,
 				RangeStart: 0,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 
 			line := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
@@ -31,7 +29,7 @@ var _ = Describe("adding lines", func() {
 			log := &mergedlog.LogFile{
 				AggLog:     aggLog,
 				RangeStart: 0,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
@@ -48,7 +46,7 @@ var _ = Describe("adding lines", func() {
 			log := &mergedlog.LogFile{
 				AggLog:     aggLog,
 				RangeStart: 0,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
@@ -65,7 +63,7 @@ var _ = Describe("adding lines", func() {
 			log := &mergedlog.LogFile{
 				AggLog:     aggLog,
 				RangeStart: 0,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
@@ -88,7 +86,7 @@ var _ = Describe("adding lines", func() {
 			log := &mergedlog.LogFile{
 				AggLog:     aggLog,
 				RangeStart: 0,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
@@ -134,7 +132,7 @@ var _ = Describe("adding lines", func() {
 			log := &mergedlog.LogFile{
 				AggLog:     aggLog,
 				RangeStart: 0,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 
 			log.InsertTimeless("line")
@@ -147,7 +145,7 @@ var _ = Describe("adding lines", func() {
 			log := &mergedlog.LogFile{
 				AggLog:     aggLog,
 				RangeStart: 1,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 
 			log.InsertTimeless("line")
@@ -162,12 +160,12 @@ var _ = Describe("adding lines", func() {
 			log1 := &mergedlog.LogFile{
 				AggLog:     aggLog,
 				RangeStart: 0,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 			log2 := &mergedlog.LogFile{
 				AggLog:     aggLog,
 				RangeStart: 0,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}
@@ -197,13 +195,13 @@ var _ = Describe("adding lines", func() {
 				Alias:      "vm1",
 				AggLog:     aggLog,
 				RangeStart: 0,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 			log2 := &mergedlog.LogFile{
 				Alias:      "vm2",
 				AggLog:     aggLog,
 				RangeStart: 0,
-				RangeStop:  MAX_INT,
+				RangeStop:  mergedlog.MAX_INT,
 			}
 
 			line1 := &mergedlog.LogLine{UTime: 0, Text: "line 1"}

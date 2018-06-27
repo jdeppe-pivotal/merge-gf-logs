@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"container/list"
-	"fmt"
 )
 
 type LogFile struct {
@@ -26,8 +25,10 @@ type LogLine struct {
 
 type LogCollection []LogFile
 
-func NewLogCollection(size int) LogCollection {
-	return make([]LogFile, 0, size)
+const MAX_INT = int64(^uint64(0) >> 1)
+
+func NewLogCollection() LogCollection {
+	return make([]LogFile, 0)
 }
 
 func (this *LogCollection) AddLogs(file *LogFile) {
@@ -81,13 +82,6 @@ func (this *LogFile) InsertTimeless(line string) *list.Element {
 	}
 
 	return nil
-}
-
-func Dump(agg *list.List) {
-	for v := agg.Front(); v != nil; v = v.Next() {
-		x, _ := v.Value.(*LogLine)
-		fmt.Printf(">>> %+v\n", x)
-	}
 }
 
 func ScanLogEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
