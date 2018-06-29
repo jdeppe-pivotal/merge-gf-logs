@@ -97,7 +97,7 @@ func ScanLogEntries(data []byte, atEOF bool) (advance int, token []byte, err err
 	// If we're at EOF, we have a final, non-terminated line. Return it,
 	// dropping the trailing newline.
 	if atEOF {
-		return len(data), bytes.TrimRight(data[0:len(data)-1], "\r\n"), nil
+		return len(data), bytes.TrimRight(data[0:len(data)], "\r\n"), nil
 	}
 
 	// Request more data.
