@@ -1,10 +1,12 @@
 package mergedlog_test
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
+	"bufio"
 	"merge-logs/mergedlog"
 	"strings"
+
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("processor integration test", func() {
@@ -16,7 +18,7 @@ var _ = Describe("processor integration test", func() {
 
 			file1 := "foo\nbar\nbaz"
 
-			processor.AddLog("", strings.NewReader(file1))
+			processor.AddLog("", strings.NewReader(file1), bufio.MaxScanTokenSize)
 			processor.Crank()
 
 			Expect(result.String()).To(Equal("[] " + strings.Join(strings.Split(file1, "\n"), "\n[] ") + "\n"))
@@ -35,7 +37,7 @@ var _ = Describe("processor integration test", func() {
 
 [fine 2015/11/19 08:52:39.506 PST  line3`
 
-			processor.AddLog("", strings.NewReader(file1))
+			processor.AddLog("", strings.NewReader(file1), bufio.MaxScanTokenSize)
 			processor.Crank()
 
 			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
@@ -59,8 +61,8 @@ var _ = Describe("processor integration test", func() {
 [fine 2015/11/19 08:52:39.506 PST  line2`
 			file2 := `[fine 2015/11/19 08:52:39.505 PST  line3`
 
-			processor.AddLog("", strings.NewReader(file1))
-			processor.AddLog("", strings.NewReader(file2))
+			processor.AddLog("", strings.NewReader(file1), bufio.MaxScanTokenSize)
+			processor.AddLog("", strings.NewReader(file2), bufio.MaxScanTokenSize)
 			processor.Crank()
 
 			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
@@ -88,8 +90,8 @@ Caused by: AnotherException
 AnotherException
   at acme.com`
 
-			processor.AddLog("", strings.NewReader(file1))
-			processor.AddLog("", strings.NewReader(file2))
+			processor.AddLog("", strings.NewReader(file1), bufio.MaxScanTokenSize)
+			processor.AddLog("", strings.NewReader(file2), bufio.MaxScanTokenSize)
 			processor.Crank()
 
 			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{

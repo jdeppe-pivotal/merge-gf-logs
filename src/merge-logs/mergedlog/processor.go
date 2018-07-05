@@ -1,17 +1,18 @@
 package mergedlog
 
 import (
+	"bufio"
+	"container/list"
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
-	"log"
-	"container/list"
-	"strconv"
-	"fmt"
-	"regexp"
-	"io"
-	"bufio"
+
 	"github.com/mgutz/ansi"
-	"os"
 )
 
 type Processor struct {
@@ -47,15 +48,18 @@ func NewProcessor(rangeStart, rangeStop int64) *Processor {
 	return processor
 }
 
-func (this *Processor) AddLog(alias string, reader io.Reader) {
+func (this *Processor) AddLog(alias string, reader io.Reader, maxBuffer int) {
 	logFile := LogFile{
-		Alias: alias,
-		Scanner: bufio.NewScanner(reader),
-		AggLog: this.aggLog,
+		Alias:      alias,
+		Scanner:    bufio.NewScanner(reader),
+		AggLog:     this.aggLog,
 		RangeStart: this.rangeStart,
-		RangeStop: this.rangeStop,
-		Color: this.palette[this.colorIndex],
+		RangeStop:  this.rangeStop,
+		Color:      this.palette[this.colorIndex],
 	}
+
+	logFile.Scanner.Split(ScanLogEntries)
+	logFile.Scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), maxBuffer)
 
 	this.logs = append(this.logs, logFile)
 	this.colorIndex = (this.colorIndex + 1) % len(this.palette)
@@ -103,6 +107,8 @@ func (this *Processor) Crank() {
 				//fmt.Printf("---- dumping ===> %s\n", line)
 				//this.Dump()
 
+			} else if err := this.logs[i].Scanner.Err(); err != nil {
+				log.Fatalf("error reading '%s': %s", this.logs[i].Alias, err.Error())
 			} else {
 				this.logs = append(this.logs[:i], this.logs[i+1:]...)
 			}

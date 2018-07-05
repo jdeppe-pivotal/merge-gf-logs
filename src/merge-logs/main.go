@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"log"
 	"merge-logs/mergedlog"
 	"os"
 	"strings"
 	"time"
+
 	"github.com/mgutz/ansi"
 )
 
@@ -29,6 +31,7 @@ func init() {
 func main() {
 	flag.StringVar(&userColor, "color", "dark", "Color scheme to use: light, dark or off")
 	duration := flag.Int64("duration", mergedlog.MAX_INT, "start of range of logs")
+	maxBuffer := flag.Int("max-buffer", bufio.MaxScanTokenSize, "maximum size of buffer to use when scanning")
 	rangeStopStr := flag.String("stop", "", "start of range of logs")
 	flag.Parse()
 
@@ -77,7 +80,7 @@ func main() {
 		}
 		defer f.Close()
 
-		processor.AddLog(alias, f)
+		processor.AddLog(alias, f, *maxBuffer)
 	}
 
 	processor.Crank()
