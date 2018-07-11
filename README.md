@@ -24,6 +24,14 @@ Each file can be assigned a 'tag' which is used in the output to identify where 
 
 Output is colored by default from a simple palette of 8 colors. Coloring can be controlled using the `--color` switch. Options are `off`, `light` and `dark` (default).
 
+Output can be limited by timestamp using the following options: (timestamps must be given in the exact form output by Geode; for example: 2018/01/25 19:09:36.949 UTC)
+
+- `-start`
+- `-stop`
+- `-duration` Duration is given in seconds and is relative to either _start_ or _stop_. Thus
+_stop_ = _start_ + _duration_ or, conversely, _start_ = _stop_ - _duration_. If both _start_ and _stop_
+are provided then the duration is ignored.
+
 ### Building
 
 The build vendors its dependencies with `dep` (`brew install dep`). Once that is installed, building should simply be:

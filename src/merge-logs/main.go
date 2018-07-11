@@ -30,26 +30,39 @@ func init() {
 
 func main() {
 	flag.StringVar(&userColor, "color", "dark", "Color scheme to use: light, dark or off")
-	duration := flag.Int64("duration", mergedlog.MAX_INT, "start of range of logs")
+	duration := flag.Int64("duration", mergedlog.MAX_INT, "duration (in seconds), relative to start or stop, to display")
 	maxBuffer := flag.Int("max-buffer", bufio.MaxScanTokenSize, "maximum size of buffer to use when scanning")
-	rangeStopStr := flag.String("stop", "", "start of range of logs")
+	rangeStartStr := flag.String("start", "", "start timestamp of range of logs")
+	rangeStopStr := flag.String("stop", "", "end timestamp of range of logs")
 	flag.Parse()
 
-	rangeStop := mergedlog.MAX_INT
+	var rangeStart int64 = 0
+	var rangeStop = mergedlog.MAX_INT
+
+	if *rangeStartStr != "" {
+		t, err := time.Parse(mergedlog.StampFormat, *rangeStartStr)
+		if err != nil {
+			log.Fatalf("Unable to parse '%s' as timestamp", rangeStartStr)
+		}
+		rangeStart = t.UnixNano()
+
+		if *rangeStopStr == "" {
+			rangeStop = rangeStart + int64(time.Duration(*duration)*time.Second)
+		}
+	}
+
 	if *rangeStopStr != "" {
 		t, err := time.Parse(mergedlog.StampFormat, *rangeStopStr)
 		if err != nil {
 			log.Fatalf("Unable to parse '%s' as timestamp", rangeStopStr)
 		}
 		rangeStop = t.UnixNano()
-		// if duration is larger than the stop time, adjust it so that start
-		// time is positive
-		if *duration > t.Unix() {
-			*duration = t.Unix()
+
+		if *rangeStartStr == "" {
+			rangeStart = rangeStop - int64(time.Duration(*duration)*time.Second)
 		}
 	}
 
-	rangeStart := rangeStop - int64(time.Duration(*duration)*time.Second)
 	processor := mergedlog.NewProcessor(rangeStart, rangeStop)
 
 	if userColor != "off" {

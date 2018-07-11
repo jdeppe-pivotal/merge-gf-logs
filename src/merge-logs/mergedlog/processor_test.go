@@ -107,4 +107,29 @@ AnotherException
 			}))
 		})
 	})
+
+	Context("when limiting output by timestamp", func() {
+		FIt("returns correctly ordered content", func() {
+			processor := mergedlog.NewProcessor(1447951959505000000, 1447951959506000000)
+			result := &strings.Builder{}
+			processor.SetWriter(result)
+
+			file1 := `[fine 2015/11/19 08:52:39.504 PST  line1
+
+[fine 2015/11/19 08:52:39.506 PST  line2`
+			file2 := `[fine 2015/11/19 08:52:39.505 PST  line3
+
+[fine 2015/11/19 08:52:39.507 PST  line4`
+
+			processor.AddLog("", strings.NewReader(file1), bufio.MaxScanTokenSize)
+			processor.AddLog("", strings.NewReader(file2), bufio.MaxScanTokenSize)
+			processor.Crank()
+
+			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
+				"[] [fine 2015/11/19 08:52:39.505 PST  line3",
+				"[] ",
+				"[] [fine 2015/11/19 08:52:39.506 PST  line2",
+			}))
+		})
+	})
 })
