@@ -35,50 +35,65 @@ func (this *LogCollection) AddLogs(file *LogFile) {
 	*this = append(*this, *file)
 }
 
-func (this *LogFile) Insert(line *LogLine) *list.Element {
-	line.Alias = this.Alias
+func (lf *LogFile) Insert(line *LogLine) *list.Element {
+	line.Alias = lf.Alias
 
-	if line.UTime < this.RangeStart || this.RangeStop < line.UTime {
+	if line.UTime < lf.RangeStart || lf.RangeStop < line.UTime {
 		return nil
 	}
 
-	if this.lastLine == nil {
-		if this.AggLog.Len() == 0 {
-			this.lastLine = this.AggLog.PushFront(line)
-			return this.lastLine
+	if lf.lastLine == nil {
+		if lf.AggLog.Len() == 0 {
+			lf.lastLine = lf.AggLog.PushFront(line)
+			return lf.lastLine
 		}
-		this.lastLine = this.AggLog.Front()
+		lf.lastLine = lf.AggLog.Front()
 	}
 
-	for ; this.lastLine != nil; this.lastLine = this.lastLine.Next() {
-		x := this.lastLine.Value.(*LogLine)
+	var insertBefore *list.Element
+	// Skip back if necessary
+	for ; lf.lastLine != nil;  {
+		x := lf.lastLine.Value.(*LogLine)
+		if line.UTime >= x.UTime {
+			break
+		}
+		insertBefore = lf.lastLine
+		lf.lastLine = lf.lastLine.Prev()
+	}
+
+	for ; lf.lastLine != nil; lf.lastLine = lf.lastLine.Next() {
+		x := lf.lastLine.Value.(*LogLine)
 		if line.UTime < x.UTime {
 			break
 		}
 	}
 
-	if this.lastLine == nil {
-		this.lastLine = this.AggLog.PushBack(line)
+	if lf.lastLine == nil {
+		if insertBefore != nil {
+			lf.lastLine = lf.AggLog.InsertBefore(line, insertBefore)
+		} else {
+			lf.lastLine = lf.AggLog.PushBack(line)
+		}
 	} else {
-		this.lastLine = this.AggLog.InsertBefore(line, this.lastLine)
+		lf.lastLine = lf.AggLog.InsertBefore(line, lf.lastLine)
 	}
 
-	return this.lastLine
+	return lf.lastLine
 }
 
-func (this *LogFile) InsertTimeless(line string) *list.Element {
-	if this.lastLine != nil {
-		// this should not happen with the custom scan function
+func (lf *LogFile) InsertTimeless(line string) *list.Element {
+	if lf.lastLine != nil {
+		// lf should not happen with the custom scan function
 		// TODO return element and error
-		last, _ := this.lastLine.Value.(*LogLine)
+		last, _ := lf.lastLine.Value.(*LogLine)
 		l := &LogLine{Alias: last.Alias, UTime: last.UTime, Text: line, Color: last.Color}
-		this.lastLine = this.AggLog.InsertAfter(l, this.lastLine)
-		return this.lastLine
-	} else if this.RangeStart == 0 {
-		l := &LogLine{Alias: this.Alias, UTime: 0, Text: line, Color: this.Color}
-		this.lastLine = this.AggLog.PushFront(l)
+		lf.lastLine = lf.AggLog.InsertAfter(l, lf.lastLine)
+		return lf.lastLine
+	} else if lf.RangeStart == 0 {
+		l := &LogLine{Alias: lf.Alias, UTime: 0, Text: line, Color: lf.Color}
+		lf.lastLine = lf.AggLog.PushFront(l)
 
-		return this.lastLine
+		return lf.lastLine
 	}
 
 	return nil

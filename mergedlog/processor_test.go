@@ -50,6 +50,40 @@ var _ = Describe("processor integration test", func() {
 		})
 	})
 
+	Context("when processing a single file with incorrectly ordered lines", func() {
+		It("returns correctly ordered content", func() {
+			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT)
+			result := &strings.Builder{}
+			processor.SetWriter(result)
+
+			file1 := `[fine 2015/11/19 08:52:39.506 GMT  line2
+
+[fine 2015/11/19 08:52:39.506 GMT  line3
+
+[fine 2015/11/19 08:52:39.504 GMT  line1
+
+[fine 2015/11/19 08:52:39.504 GMT  line1.5
+
+[fine 2015/11/19 08:52:39.507 GMT  line4
+`
+
+			processor.AddLog("", strings.NewReader(file1), bufio.MaxScanTokenSize)
+			processor.Crank()
+
+			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
+				"[] [fine 2015/11/19 08:52:39.504 GMT  line1",
+				"[] ",
+				"[] [fine 2015/11/19 08:52:39.504 GMT  line1.5",
+				"[] ",
+				"[] [fine 2015/11/19 08:52:39.506 GMT  line2",
+				"[] ",
+				"[] [fine 2015/11/19 08:52:39.506 GMT  line3",
+				"[] ",
+				"[] [fine 2015/11/19 08:52:39.507 GMT  line4",
+			}))
+		})
+	})
+
 	Context("when processing multiple files with dates", func() {
 		It("returns correctly ordered content", func() {
 			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT)
@@ -109,7 +143,7 @@ AnotherException
 	})
 
 	Context("when limiting output by timestamp", func() {
-		FIt("returns correctly ordered content", func() {
+		It("returns correctly ordered content", func() {
 			processor := mergedlog.NewProcessor(1447951959505000000, 1447951959506000000)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
