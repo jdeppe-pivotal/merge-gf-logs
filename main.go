@@ -1,11 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"flag"
+	"fmt"
 	"log"
 	"merge-logs/mergedlog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -31,9 +32,12 @@ func init() {
 func main() {
 	flag.StringVar(&userColor, "color", "dark", "Color scheme to use: light, dark or off")
 	duration := flag.Int64("duration", mergedlog.MAX_INT, "duration (in seconds), relative to start or stop, to display")
-	maxBuffer := flag.Int("max-buffer", bufio.MaxScanTokenSize, "maximum size of buffer to use when scanning")
+	maxBuffer := flag.Int("max-buffer", 1024*1024, "maximum size of buffer to use when scanning")
 	rangeStartStr := flag.String("start", "", "start timestamp of range of logs")
 	rangeStopStr := flag.String("stop", "", "end timestamp of range of logs")
+	debugLevel := flag.Int("debug", 0, "debug level - 0=off 1=verbose 2=very verbose")
+	fullAlias := flag.Bool("full-alias", false, "use the full name as alias")
+
 	flag.Parse()
 
 	var rangeStart int64 = 0
@@ -47,7 +51,11 @@ func main() {
 		rangeStart = t.UnixNano()
 
 		if *rangeStopStr == "" {
-			rangeStop = rangeStart + int64(time.Duration(*duration)*time.Second)
+			if *duration == mergedlog.MAX_INT {
+				rangeStop = mergedlog.MAX_INT
+			} else {
+				rangeStop = rangeStart + int64(time.Duration(*duration)*time.Second)
+			}
 		}
 	}
 
@@ -59,11 +67,23 @@ func main() {
 		rangeStop = t.UnixNano()
 
 		if *rangeStartStr == "" {
-			rangeStart = rangeStop - int64(time.Duration(*duration)*time.Second)
+			if *duration == mergedlog.MAX_INT {
+				rangeStart = 0
+			} else {
+				rangeStart = rangeStop - int64(time.Duration(*duration)*time.Second)
+			}
 		}
 	}
 
-	processor := mergedlog.NewProcessor(rangeStart, rangeStop)
+	if *debugLevel > 0 {
+		fmt.Printf("---- DEBUG ===> rangeStart: %v\n", rangeStart)
+		fmt.Printf("---- DEBUG ===> rangeStop: %v\n", rangeStop)
+		fmt.Printf("---- DEBUG ===> calculated duration: %v\n", rangeStop-rangeStart)
+		fmt.Printf("---- DEBUG ===> duration: %v\n", *duration)
+		fmt.Printf("---- DEBUG ===> maxInt: %v\n", mergedlog.MAX_INT)
+	}
+
+	processor := mergedlog.NewProcessor(rangeStart, rangeStop, debugLevel)
 
 	if userColor != "off" {
 		if userColor == "light" {
@@ -81,8 +101,9 @@ func main() {
 		// See if we have an alias for the log
 		if len(parts) == 1 {
 			logName = parts[0]
-			bits := strings.Split(logName, "/")
-			alias = bits[len(bits)-1]
+			if !*fullAlias {
+				alias = filepath.Base(logName)
+			}
 		} else {
 			logName = parts[1]
 		}

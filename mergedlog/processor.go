@@ -24,6 +24,7 @@ type Processor struct {
 	colorIndex       int
 	palette          []string
 	writer           io.Writer
+	debugLevel		 int
 }
 
 var FLUSH_BATCH_SIZE = 1000
@@ -35,7 +36,7 @@ func init() {
 	resetColor = ansi.ColorCode("reset")
 }
 
-func NewProcessor(rangeStart, rangeStop int64) *Processor {
+func NewProcessor(rangeStart, rangeStop int64, debugLevel *int) *Processor {
 	processor := &Processor{}
 	processor.aggLog = list.New()
 	processor.rangeStart = rangeStart
@@ -44,6 +45,7 @@ func NewProcessor(rangeStart, rangeStop int64) *Processor {
 	processor.palette = make([]string, 1)
 	processor.palette[0] = ""
 	processor.writer = os.Stdout
+	processor.debugLevel = *debugLevel
 
 	return processor
 }
@@ -93,6 +95,10 @@ func (this *Processor) Crank() {
 
 					l := &LogLine{Alias: this.logs[i].Alias, UTime: t.UnixNano(), Text: line, Color: this.logs[i].Color}
 					this.logs[i].Insert(l)
+
+					if this.debugLevel > 0 {
+						fmt.Printf("---- DEBUG ===> %v\n", l)
+					}
 				} else {
 					if x := this.logs[i].InsertTimeless(line); x != nil {
 						v, _ := x.Value.(*LogLine)
@@ -104,8 +110,9 @@ func (this *Processor) Crank() {
 					oldestStampSeen = lastTimeRead
 				}
 
-				//fmt.Printf("---- dumping ===> %s\n", line)
-				//this.Dump()
+				if this.debugLevel > 1 {
+					this.Dump()
+				}
 
 			} else if err := this.logs[i].Scanner.Err(); err != nil {
 				log.Fatalf("error reading '%s': %s", this.logs[i].Alias, err.Error())
@@ -114,7 +121,7 @@ func (this *Processor) Crank() {
 			}
 		}
 
-		if lineCount%FLUSH_BATCH_SIZE == 0 {
+		if lineCount > FLUSH_BATCH_SIZE {
 			this.flushLogs(oldestStampSeen, this.aggLog, this.maxLogNameLength)
 			oldestStampSeen = MAX_INT
 		}
