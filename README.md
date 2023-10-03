@@ -34,11 +34,6 @@ are provided then the duration is ignored.
 
 ### Building
 
-The build vendors its dependencies with `dep` (`brew install dep`). Once that is installed, building should simply be:
+Simply:
 
-    # Update/get dependencies if this is the first time here
-    cd src/merge-logs
-    dep ensure
-    cd -
-    # Actually do the build
-    go build -o ml merge-logs
+    go build
