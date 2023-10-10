@@ -33,8 +33,8 @@ func main() {
 	flag.StringVar(&userColor, "color", "dark", "Color scheme to use: light, dark or off")
 	duration := flag.Int64("duration", mergedlog.MAX_INT, "duration (in seconds), relative to start or stop, to display")
 	maxBuffer := flag.Int("max-buffer", 1024*1024, "maximum size of buffer to use when scanning")
-	rangeStartStr := flag.String("start", "", "start timestamp of range of logs")
-	rangeStopStr := flag.String("stop", "", "end timestamp of range of logs")
+	rangeStartStr := flag.String("start", "", "start timestamp of range of logs. Format: '2018/01/25 19:09:36.949 UTC'")
+	rangeStopStr := flag.String("stop", "", "end timestamp of range of logs. Format: '2018/01/25 19:09:36.949 UTC'")
 	debugLevel := flag.Int("debug", 0, "debug level - 0=off 1=verbose 2=very verbose")
 	fullAlias := flag.Bool("full-alias", false, "use the full name as alias")
 
