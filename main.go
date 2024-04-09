@@ -1,42 +1,43 @@
 package main
 
 import (
-	"flag"
 	"fmt"
+	flag "github.com/spf13/pflag"
 	"log"
 	"merge-logs/mergedlog"
 	"os"
 	"path/filepath"
-	"strings"
+	"regexp"
 	"time"
-
-	"github.com/mgutz/ansi"
 )
 
 var userColor string
-var palette []string
+var palette []mergedlog.ColorFn
 
 func init() {
 	// Taken from the Solarized color palette
-	palette = make([]string, 8)
-	palette[0] = ansi.ColorCode("253") // whiteish
-	palette[1] = ansi.ColorCode("64")  // green
-	palette[2] = ansi.ColorCode("37")  // cyan
-	palette[3] = ansi.ColorCode("33")  // blue
-	palette[4] = ansi.ColorCode("61")  // violet
-	palette[5] = ansi.ColorCode("125") // magenta
-	palette[6] = ansi.ColorCode("160") // red
-	palette[7] = ansi.ColorCode("166") // orange
+	palette = make([]mergedlog.ColorFn, 8)
+	palette[0] = mergedlog.MakePaletteEntry("253") // whiteish
+	palette[1] = mergedlog.MakePaletteEntry("64")  // green
+	palette[2] = mergedlog.MakePaletteEntry("37")  // cyan
+	palette[3] = mergedlog.MakePaletteEntry("33")  // blue
+	palette[4] = mergedlog.MakePaletteEntry("61")  // violet
+	palette[5] = mergedlog.MakePaletteEntry("125") // magenta
+	palette[6] = mergedlog.MakePaletteEntry("160") // red
+	palette[7] = mergedlog.MakePaletteEntry("166") // orange
 }
 
 func main() {
-	flag.StringVar(&userColor, "color", "dark", "Color scheme to use: light, dark or off")
+	flag.StringVar(&userColor, "color", "dark", "ColorFn scheme to use: light, dark or off")
 	duration := flag.Int64("duration", mergedlog.MAX_INT, "duration (in seconds), relative to start or stop, to display")
 	maxBuffer := flag.Int("max-buffer", 1024*1024, "maximum size of buffer to use when scanning")
 	rangeStartStr := flag.String("start", "", "start timestamp of range of logs. Format: '2018/01/25 19:09:36.949 UTC'")
 	rangeStopStr := flag.String("stop", "", "end timestamp of range of logs. Format: '2018/01/25 19:09:36.949 UTC'")
 	debugLevel := flag.Int("debug", 0, "debug level - 0=off 1=verbose 2=very verbose")
 	fullAlias := flag.Bool("full-alias", false, "use the full name as alias")
+	noLogRoll := flag.Bool("no-roll", false, "do not attempt to use the log rolling suffix numbers to associate different files with the same system (color)")
+	grep := flag.StringP("grep", "g", "", "only process and display lines containing the regex")
+	highlight := flag.StringP("highlight", "h", "", "highlight text that matches the regex")
 
 	flag.Parse()
 
@@ -46,7 +47,7 @@ func main() {
 	if *rangeStartStr != "" {
 		t, err := time.Parse(mergedlog.StampFormat, *rangeStartStr)
 		if err != nil {
-			log.Fatalf("Unable to parse '%s' as timestamp", rangeStartStr)
+			log.Fatalf("Unable to parse '%s' as timestamp", *rangeStartStr)
 		}
 		rangeStart = t.UnixNano()
 
@@ -62,7 +63,7 @@ func main() {
 	if *rangeStopStr != "" {
 		t, err := time.Parse(mergedlog.StampFormat, *rangeStopStr)
 		if err != nil {
-			log.Fatalf("Unable to parse '%s' as timestamp", rangeStopStr)
+			log.Fatalf("Unable to parse '%s' as timestamp", *rangeStopStr)
 		}
 		rangeStop = t.UnixNano()
 
@@ -83,38 +84,72 @@ func main() {
 		fmt.Printf("---- DEBUG ===> maxInt: %v\n", mergedlog.MAX_INT)
 	}
 
-	processor := mergedlog.NewProcessor(rangeStart, rangeStop, debugLevel)
+	var grepRegex *regexp.Regexp
+	if *grep != "" {
+		grepRegex = mergedlog.MakeGrepRegex(*grep)
+	}
+
+	var highlightRegex *regexp.Regexp
+	if *highlight != "" {
+		highlightRegex = regexp.MustCompile("(.*)(" + *highlight + ")(.*)")
+	}
+
+	processor := mergedlog.NewProcessor(rangeStart, rangeStop, grepRegex, highlightRegex, debugLevel)
 
 	if userColor != "off" {
 		if userColor == "light" {
-			palette[0] = ansi.ColorCode("234") // blackish
+			// blackish
+			palette[0] = mergedlog.MakePaletteEntry("234")
 		}
 		processor.SetPalette(palette)
 	}
 
-	var logName, alias string
-	// Gather our files and set up a Scanner for each of them
-	for _, logTagName := range flag.Args() {
-		parts := strings.Split(logTagName, ":")
-		alias = parts[0]
-
-		// See if we have an alias for the log
-		if len(parts) == 1 {
-			logName = parts[0]
-			if !*fullAlias {
-				alias = filepath.Base(logName)
-			}
+	// Use an array so that we get consistent ordering of the files and thus consistent coloring across runs
+	filenameList := make([]string, len(flag.Args()))
+	fullToShort := make(map[string]string)
+	shortToTag := make(map[string]*string)
+	// Process the log filenames and potentially group them
+	for i, logTagName := range flag.Args() {
+		fullName, shortName, tag := mergedlog.ProcessFilename(logTagName, *fullAlias)
+		filenameList[i] = fullName
+		var maybeShort string
+		if *noLogRoll {
+			maybeShort = fullName
 		} else {
-			logName = parts[1]
+			maybeShort = shortName
+		}
+		fullToShort[fullName] = maybeShort
+		if _, present := shortToTag[maybeShort]; !present && tag != nil {
+			shortToTag[maybeShort] = tag
+		}
+	}
+
+	var alias string
+	// Gather our files and set up a Scanner for each of them
+	for _, full := range filenameList {
+		var rolled bool
+		short := fullToShort[full]
+		if tag, ok := shortToTag[short]; ok {
+			alias = *tag
+		} else {
+			if *fullAlias {
+				alias = full
+			} else {
+				alias = short
+			}
+
+			if filepath.Base(full) != filepath.Base(short) {
+				rolled = true
+			}
 		}
 
-		f, err := os.Open(logName)
+		f, err := os.Open(full)
 		if err != nil {
 			log.Fatalf("Error opening file: %s", err)
 		}
 		defer f.Close()
 
-		processor.AddLog(alias, f, *maxBuffer)
+		processor.AddLog(alias, rolled, f, *maxBuffer)
 	}
 
 	processor.Crank()

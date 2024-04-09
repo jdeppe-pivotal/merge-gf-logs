@@ -10,7 +10,8 @@ type LogFile struct {
 	Alias      string
 	Scanner    *bufio.Scanner
 	AggLog     *list.List
-	Color      string
+	Color      ColorFn
+	GrepColor  string
 	lastLine   *list.Element
 	RangeStart int64
 	RangeStop  int64
@@ -19,8 +20,8 @@ type LogFile struct {
 type LogLine struct {
 	Alias string
 	UTime int64
-	Text  string
-	Color string
+	Text  LogEntry
+	Color ColorFn
 }
 
 type LogCollection []LogFile
@@ -52,7 +53,7 @@ func (lf *LogFile) Insert(line *LogLine) *list.Element {
 
 	var insertBefore *list.Element
 	// Skip back if necessary
-	for ; lf.lastLine != nil;  {
+	for lf.lastLine != nil {
 		x := lf.lastLine.Value.(*LogLine)
 		if line.UTime >= x.UTime {
 			break
@@ -81,23 +82,23 @@ func (lf *LogFile) Insert(line *LogLine) *list.Element {
 	return lf.lastLine
 }
 
-func (lf *LogFile) InsertTimeless(line string) *list.Element {
-	if lf.lastLine != nil {
-		// lf should not happen with the custom scan function
-		// TODO return element and error
-		last, _ := lf.lastLine.Value.(*LogLine)
-		l := &LogLine{Alias: last.Alias, UTime: last.UTime, Text: line, Color: last.Color}
-		lf.lastLine = lf.AggLog.InsertAfter(l, lf.lastLine)
-		return lf.lastLine
-	} else if lf.RangeStart == 0 {
-		l := &LogLine{Alias: lf.Alias, UTime: 0, Text: line, Color: lf.Color}
-		lf.lastLine = lf.AggLog.PushFront(l)
-
-		return lf.lastLine
-	}
-
-	return nil
-}
+//func (lf *LogFile) InsertTimeless(line Span) *list.Element {
+//	if lf.lastLine != nil {
+//		// lf should not happen with the custom scan function
+//		// TODO return element and error
+//		last, _ := lf.lastLine.Value.(*LogLine)
+//		l := &LogLine{Alias: last.Alias, UTime: last.UTime, Text: line, ColorFn: last.ColorFn}
+//		lf.lastLine = lf.AggLog.InsertAfter(l, lf.lastLine)
+//		return lf.lastLine
+//	} else if lf.RangeStart == 0 {
+//		l := &LogLine{Alias: lf.Alias, UTime: 0, Text: line, ColorFn: lf.ColorFn}
+//		lf.lastLine = lf.AggLog.PushFront(l)
+//
+//		return lf.lastLine
+//	}
+//
+//	return nil
+//}
 
 func ScanLogEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
@@ -112,7 +113,7 @@ func ScanLogEntries(data []byte, atEOF bool) (advance int, token []byte, err err
 	// If we're at EOF, we have a final, non-terminated line. Return it,
 	// dropping the trailing newline.
 	if atEOF {
-		return len(data), bytes.TrimRight(data[0:len(data)], "\r\n"), nil
+		return len(data), bytes.TrimRight(data[0:], "\r\n"), nil
 	}
 
 	// Request more data.

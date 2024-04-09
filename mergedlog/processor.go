@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/mgutz/ansi"
 )
 
 type Processor struct {
@@ -22,49 +20,73 @@ type Processor struct {
 	rangeStop        int64
 	maxLogNameLength int
 	colorIndex       int
-	palette          []string
+	aliasColorMap    map[string]int
+	palette          []ColorFn
 	writer           io.Writer
-	debugLevel		 int
+	debugLevel       int
+	grepRegex        *regexp.Regexp
+	highlightRegex   *regexp.Regexp
 }
 
+type ColorFn struct {
+	Normal    func(string) Highlighted
+	Grep      func(string) Highlighted
+	Highlight func(string) Highlighted
+}
+
+// Highlighted indicates a string that has been marked up with ANSI codes
+type Highlighted string
+
+// Span is a slice of either *string or [Highlighted] values and represents a line of text
+type Span []any
+
+type LogEntry []Span
+
 var FLUSH_BATCH_SIZE = 1000
-var resetColor string
 var gfeLogLineRE = regexp.MustCompile(`^\[\w+ (([^ ]* ){3}).*`)
 var StampFormat = "2006/01/02 15:04:05.000 MST"
 
-func init() {
-	resetColor = ansi.ColorCode("reset")
-}
-
-func NewProcessor(rangeStart, rangeStop int64, debugLevel *int) *Processor {
+func NewProcessor(rangeStart, rangeStop int64, grepRegex, highlightRegex *regexp.Regexp, debugLevel *int) *Processor {
 	processor := &Processor{}
+	processor.logs = NewLogCollection()
 	processor.aggLog = list.New()
 	processor.rangeStart = rangeStart
 	processor.rangeStop = rangeStop
-	processor.logs = NewLogCollection()
-	processor.palette = make([]string, 1)
-	processor.palette[0] = ""
-	processor.writer = os.Stdout
+	processor.aliasColorMap = make(map[string]int)
+	processor.palette = make([]ColorFn, 1)
+	processor.palette[0] = MakePaletteEntry("234")
 	processor.debugLevel = *debugLevel
+	processor.grepRegex = grepRegex
+	processor.highlightRegex = highlightRegex
+	processor.writer = os.Stdout
 
 	return processor
 }
 
-func (this *Processor) AddLog(alias string, reader io.Reader, maxBuffer int) {
+func (this *Processor) AddLog(alias string, rolled bool, reader io.Reader, maxBuffer int) {
+	if _, ok := this.aliasColorMap[alias]; !ok {
+		this.aliasColorMap[alias] = this.colorIndex
+		this.colorIndex = (this.colorIndex + 1) % len(this.palette)
+	}
+
+	aliasAndRoll := alias
+	if rolled {
+		aliasAndRoll += "*"
+	}
+
 	logFile := LogFile{
-		Alias:      alias,
+		Alias:      aliasAndRoll,
 		Scanner:    bufio.NewScanner(reader),
 		AggLog:     this.aggLog,
 		RangeStart: this.rangeStart,
 		RangeStop:  this.rangeStop,
-		Color:      this.palette[this.colorIndex],
+		Color:      this.palette[this.aliasColorMap[alias]],
 	}
 
 	logFile.Scanner.Split(ScanLogEntries)
 	logFile.Scanner.Buffer(make([]byte, bufio.MaxScanTokenSize), maxBuffer)
 
 	this.logs = append(this.logs, logFile)
-	this.colorIndex = (this.colorIndex + 1) % len(this.palette)
 
 	if len(logFile.Alias) > this.maxLogNameLength {
 		this.maxLogNameLength = len(logFile.Alias)
@@ -74,6 +96,7 @@ func (this *Processor) AddLog(alias string, reader io.Reader, maxBuffer int) {
 func (this *Processor) Crank() {
 	var oldestStampSeen = MAX_INT
 	var lastTimeRead int64
+	var grepMatch []string
 	lineCount := 0
 
 	for len(this.logs) > 0 {
@@ -81,29 +104,72 @@ func (this *Processor) Crank() {
 		for i := len(this.logs) - 1; i >= 0; i-- {
 			if this.logs[i].Scanner.Scan() {
 				lineCount++
-				line := this.logs[i].Scanner.Text()
-				matches := gfeLogLineRE.FindStringSubmatch(line)
+				logChunk := this.logs[i].Scanner.Text()
 
-				if matches != nil {
-					stamp := strings.TrimSpace(matches[1])
-					t, err := time.Parse(StampFormat, stamp)
-					if err != nil {
-						log.Printf("Unable to parse date stamp '%s': %s", stamp, err)
-						continue
-					}
-					lastTimeRead = t.UnixNano()
+				matches := gfeLogLineRE.FindStringSubmatch(logChunk)
+				if matches == nil {
+					// This should not happen since the [ScanLogEntries] function should bring us
+					// a whole log entry chunk of text.
+					panic("No match for pattern on logChunk: " + logChunk)
+				}
 
-					l := &LogLine{Alias: this.logs[i].Alias, UTime: t.UnixNano(), Text: line, Color: this.logs[i].Color}
-					this.logs[i].Insert(l)
+				logEntry := LogEntry{}
 
-					if this.debugLevel > 0 {
-						fmt.Printf("---- DEBUG ===> %v\n", l)
+				foundGrep := false
+				for _, line := range strings.Split(logChunk, "\n") {
+					span := Span{}
+					if this.grepRegex != nil {
+						grepMatch = this.grepRegex.FindStringSubmatch(line)
+						if grepMatch != nil {
+							foundGrep = true
+							span = append(span, grepMatch[1],
+								this.logs[i].Color.Grep(grepMatch[2]),
+								grepMatch[3])
+						} else {
+							span = append(span, line)
+						}
+					} else {
+						span = append(span, line)
 					}
-				} else {
-					if x := this.logs[i].InsertTimeless(line); x != nil {
-						v, _ := x.Value.(*LogLine)
-						lastTimeRead = v.UTime
+
+					logEntry = append(logEntry, span)
+				}
+
+				// If we're grepping but didn't find anything in the whole log entry then move on
+				if this.grepRegex != nil && !foundGrep {
+					continue
+				}
+
+				if this.highlightRegex != nil {
+					for j := 0; j < len(logEntry); j++ {
+						for k := 0; k < len(logEntry[j]); k++ {
+							span := logEntry[j]
+							if s, ok := span[k].(string); ok {
+								m := this.highlightRegex.FindStringSubmatch(s)
+								if m != nil {
+									span[k] = this.logs[i].Color.Normal(m[1])
+									logEntry[j] = append(span[:k+1],
+										this.logs[i].Color.Highlight(m[2]),
+										m[3], span[k+1:])
+								}
+							}
+						}
 					}
+				}
+
+				stamp := strings.TrimSpace(matches[1])
+				t, err := time.Parse(StampFormat, stamp)
+				if err != nil {
+					log.Printf("Unable to parse date stamp '%s': %s", stamp, err)
+					continue
+				}
+				lastTimeRead = t.UnixNano()
+
+				l := &LogLine{Alias: this.logs[i].Alias, UTime: t.UnixNano(), Text: logEntry, Color: this.logs[i].Color}
+				this.logs[i].Insert(l)
+
+				if this.debugLevel > 0 {
+					fmt.Printf("---- DEBUG ===> %v\n", l)
 				}
 
 				if lastTimeRead < oldestStampSeen {
@@ -130,7 +196,7 @@ func (this *Processor) Crank() {
 	this.flushLogs(MAX_INT, this.aggLog, this.maxLogNameLength)
 }
 
-func (this *Processor) SetPalette(palette []string) {
+func (this *Processor) SetPalette(palette []ColorFn) {
 	this.palette = palette
 }
 
@@ -146,21 +212,25 @@ func (this *Processor) Dump() {
 }
 
 func (this *Processor) flushLogs(highestStamp int64, aggLog *list.List, maxLogNameLength int) {
-	var reset string
 	for e := aggLog.Front(); e != nil; e = aggLog.Front() {
 		entry, _ := e.Value.(*LogLine)
 		if entry.UTime < highestStamp {
-			format := "%s%" + strconv.Itoa(len(entry.Alias)-maxLogNameLength) + "s[%s] %s%s\n"
+			format := "%" + strconv.Itoa(len(entry.Alias)-maxLogNameLength) + "s[%s] "
 
-			if entry.Color != "" {
-				reset = resetColor
-			} else {
-				reset = ""
+			for _, logEntry := range entry.Text {
+				fmt.Fprintf(this.writer, format, "", entry.Color.Normal(entry.Alias))
+				for _, span := range logEntry {
+					switch s := span.(type) {
+					case Highlighted:
+						fmt.Fprint(this.writer, span)
+					case string:
+						fmt.Fprint(this.writer, entry.Color.Normal(s))
+					}
+
+				}
+				fmt.Fprintln(this.writer)
 			}
 
-			for _, line := range strings.Split(entry.Text, "\n") {
-				fmt.Fprintf(this.writer, format, entry.Color, "", entry.Alias, line, reset)
-			}
 			aggLog.Remove(e)
 		} else {
 			break
