@@ -82,24 +82,6 @@ func (lf *LogFile) Insert(line *LogLine) *list.Element {
 	return lf.lastLine
 }
 
-//func (lf *LogFile) InsertTimeless(line Span) *list.Element {
-//	if lf.lastLine != nil {
-//		// lf should not happen with the custom scan function
-//		// TODO return element and error
-//		last, _ := lf.lastLine.Value.(*LogLine)
-//		l := &LogLine{Alias: last.Alias, UTime: last.UTime, Text: line, ColorFn: last.ColorFn}
-//		lf.lastLine = lf.AggLog.InsertAfter(l, lf.lastLine)
-//		return lf.lastLine
-//	} else if lf.RangeStart == 0 {
-//		l := &LogLine{Alias: lf.Alias, UTime: 0, Text: line, ColorFn: lf.ColorFn}
-//		lf.lastLine = lf.AggLog.PushFront(l)
-//
-//		return lf.lastLine
-//	}
-//
-//	return nil
-//}
-
 func ScanLogEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil

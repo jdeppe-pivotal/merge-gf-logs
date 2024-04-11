@@ -94,7 +94,7 @@ func main() {
 		highlightRegex = regexp.MustCompile("(.*)(" + *highlight + ")(.*)")
 	}
 
-	processor := mergedlog.NewProcessor(rangeStart, rangeStop, grepRegex, highlightRegex, debugLevel)
+	processor := mergedlog.NewProcessor(rangeStart, rangeStop, grepRegex, highlightRegex, *debugLevel)
 
 	if userColor != "off" {
 		if userColor == "light" {

@@ -42,11 +42,11 @@ type Span []any
 
 type LogEntry []Span
 
-var FLUSH_BATCH_SIZE = 1000
+var FLUSH_BATCH_SIZE = 20
 var gfeLogLineRE = regexp.MustCompile(`^\[\w+ (([^ ]* ){3}).*`)
 var StampFormat = "2006/01/02 15:04:05.000 MST"
 
-func NewProcessor(rangeStart, rangeStop int64, grepRegex, highlightRegex *regexp.Regexp, debugLevel *int) *Processor {
+func NewProcessor(rangeStart, rangeStop int64, grepRegex, highlightRegex *regexp.Regexp, debugLevel int) *Processor {
 	processor := &Processor{}
 	processor.logs = NewLogCollection()
 	processor.aggLog = list.New()
@@ -55,7 +55,7 @@ func NewProcessor(rangeStart, rangeStop int64, grepRegex, highlightRegex *regexp
 	processor.aliasColorMap = make(map[string]int)
 	processor.palette = make([]ColorFn, 1)
 	processor.palette[0] = MakePaletteEntry("234")
-	processor.debugLevel = *debugLevel
+	processor.debugLevel = debugLevel
 	processor.grepRegex = grepRegex
 	processor.highlightRegex = highlightRegex
 	processor.writer = os.Stdout
@@ -98,19 +98,24 @@ func (this *Processor) Crank() {
 	var lastTimeRead int64
 	var grepMatch []string
 	lineCount := 0
+	var linesSeenPerLoop int
 
 	for len(this.logs) > 0 {
+		linesSeenPerLoop = 0
 		// Process log list backwards so that we can delete entries as necessary
 		for i := len(this.logs) - 1; i >= 0; i-- {
 			if this.logs[i].Scanner.Scan() {
-				lineCount++
 				logChunk := this.logs[i].Scanner.Text()
 
 				matches := gfeLogLineRE.FindStringSubmatch(logChunk)
 				if matches == nil {
+					if lineCount == 0 {
+						continue
+					}
 					// This should not happen since the [ScanLogEntries] function should bring us
 					// a whole log entry chunk of text.
-					panic("No match for pattern on logChunk: " + logChunk)
+					panic(fmt.Sprintf("No match for pattern on logChunk: '%s' file: %s line: %d",
+						logChunk, this.logs[i].Alias, lineCount))
 				}
 
 				logEntry := LogEntry{}
@@ -140,6 +145,8 @@ func (this *Processor) Crank() {
 					continue
 				}
 
+				lineCount++
+
 				if this.highlightRegex != nil {
 					for j := 0; j < len(logEntry); j++ {
 						for k := 0; k < len(logEntry[j]); k++ {
@@ -167,17 +174,20 @@ func (this *Processor) Crank() {
 
 				l := &LogLine{Alias: this.logs[i].Alias, UTime: t.UnixNano(), Text: logEntry, Color: this.logs[i].Color}
 				this.logs[i].Insert(l)
-
-				if this.debugLevel > 0 {
-					fmt.Printf("---- DEBUG ===> %v\n", l)
-				}
+				linesSeenPerLoop++
 
 				if lastTimeRead < oldestStampSeen {
 					oldestStampSeen = lastTimeRead
 				}
 
-				if this.debugLevel > 1 {
-					this.Dump()
+				if this.debugLevel > 0 {
+					if this.debugLevel >= 1 {
+						fmt.Printf("---- DEBUG oldestStampSeen: %d\n", oldestStampSeen)
+						fmt.Printf("---- DEBUG ===> %v\n", l)
+					}
+					if this.debugLevel > 1 {
+						this.Dump()
+					}
 				}
 
 			} else if err := this.logs[i].Scanner.Err(); err != nil {
@@ -187,9 +197,13 @@ func (this *Processor) Crank() {
 			}
 		}
 
-		if lineCount > FLUSH_BATCH_SIZE {
+		if lineCount > FLUSH_BATCH_SIZE && linesSeenPerLoop == len(this.logs) {
+			if this.debugLevel > 0 {
+				fmt.Printf("---- DEBUG flushing logs\n")
+			}
 			this.flushLogs(oldestStampSeen, this.aggLog, this.maxLogNameLength)
 			oldestStampSeen = MAX_INT
+			lineCount = 0
 		}
 	}
 
