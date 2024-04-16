@@ -109,7 +109,7 @@ func (this *Processor) Crank() {
 
 				matches := gfeLogLineRE.FindStringSubmatch(logChunk)
 				if matches == nil {
-					if lineCount == 0 {
+					if lineCount == 0 || logChunk == "" {
 						continue
 					}
 					// This should not happen since the [ScanLogEntries] function should bring us
@@ -154,10 +154,15 @@ func (this *Processor) Crank() {
 							if s, ok := span[k].(string); ok {
 								m := this.highlightRegex.FindStringSubmatch(s)
 								if m != nil {
-									span[k] = this.logs[i].Color.Normal(m[1])
-									logEntry[j] = append(span[:k+1],
-										this.logs[i].Color.Highlight(m[2]),
-										m[3], span[k+1:])
+									newSpan := Span{}
+									for n := 0; n < k; n++ {
+										newSpan = append(newSpan, span[n])
+									}
+									newSpan = append(newSpan, m[1], this.logs[i].Color.Highlight(m[2]), m[3])
+									for n := k + 1; n < len(span); n++ {
+										newSpan = append(newSpan, span[n])
+									}
+									logEntry[j] = newSpan
 								}
 							}
 						}

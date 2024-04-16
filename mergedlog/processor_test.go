@@ -213,6 +213,37 @@ SomeException
 		})
 	})
 
+	Context("when grepping and highlighting", func() {
+		It("returns correctly marked log entry", func() {
+			regex1 := mergedlog.MakeGrepRegex("SomeException")
+			regex2 := mergedlog.MakeGrepRegex("line1")
+			testPalette := make([]mergedlog.ColorFn, 1)
+			f1 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted(">" + s + "<") }
+			f2 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("#" + s + "#") }
+			f3 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("%" + s + "%") }
+			testPalette[0] = mergedlog.ColorFn{f1, f2, f3}
+
+			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex1, regex2, 0)
+			result := &strings.Builder{}
+			processor.SetWriter(result)
+			processor.SetPalette(testPalette)
+
+			file1 := `[info 2015/11/19 08:52:39.504 PST  line1 also has SomeException in line1
+SomeException line1
+  at foo.com
+[info 2015/11/19 08:52:40.774 PST  line2`
+
+			processor.AddLog("", false, strings.NewReader(file1), bufio.MaxScanTokenSize)
+			processor.Crank()
+
+			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
+				"[><] >[info 2015/11/19 08:52:39.504 PST  <%line1%> also has <#SomeException#> in <%line1%><",
+				"[><] ><#SomeException#> <%line1%><",
+				"[><] >  at foo.com<",
+			}))
+		})
+	})
+
 	Context("when grepping for text across multiple files", func() {
 		It("returns log entry from all files", func() {
 			regex := mergedlog.MakeGrepRegex("SomeException")
