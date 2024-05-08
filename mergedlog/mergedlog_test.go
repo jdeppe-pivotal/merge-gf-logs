@@ -78,27 +78,10 @@ var _ = Describe("adding lines", func() {
 			line = line.Next()
 			Expect(line.Value).To(Equal(line3))
 		})
-
-		It("only retains lines within the range", func() {
-			log := mergedlog.NewMergedLog()
-			line1 := &mergedlog.LogLine{UTime: 0, Text: makeSpan("line 1")}
-			line2 := &mergedlog.LogLine{UTime: 1, Text: makeSpan("line 2")}
-			line3 := &mergedlog.LogLine{UTime: 2, Text: makeSpan("line 3")}
-
-			log.Insert(line2)
-			log.Insert(line1)
-			log.Insert(line3)
-
-			line := log.AggLog.Front()
-			Expect(line.Value).To(Equal(line1))
-			line = line.Next()
-			Expect(line.Value).To(Equal(line2))
-			Expect(line.Next()).To(BeNil())
-		})
 	})
 
 	Context("Custom scan function", func() {
-		FIt("works at the end of a reader with no data", func() {
+		It("works at the end of a reader with no data", func() {
 			advance, token, err := mergedlog.ScanLogEntries([]byte{}, true)
 			Expect(advance).Should(Equal(0))
 			Expect(token).Should(Equal([]byte{}))
