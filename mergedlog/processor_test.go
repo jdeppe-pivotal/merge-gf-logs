@@ -2,12 +2,11 @@ package mergedlog_test
 
 import (
 	"bufio"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"merge-logs/mergedlog"
 	"regexp"
 	"strings"
-
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 // regex is nil
@@ -21,15 +20,21 @@ func init() {
 }
 
 var _ = Describe("processor integration test", func() {
+	var processor *mergedlog.Processor
+	var result *strings.Builder
+
+	BeforeEach(func() {
+		logChannel := make(chan *mergedlog.LogLine)
+		processor = mergedlog.NewProcessor(logChannel, 0, mergedlog.MAX_INT, nilRegex, nilRegex, 0)
+		processor.SetPalette(noopPalette)
+		result = &strings.Builder{}
+		processor.SetWriter(result)
+
+	})
+
 	Context("when processing a single file", func() {
 		It("returns the same content", func() {
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, nilRegex, 0)
-			result := &strings.Builder{}
-			processor.SetWriter(result)
-			processor.SetPalette(noopPalette)
-
 			file1 := "[fine 2015/11/19 08:52:39.504 PST foo\nbar\nbaz"
-
 			processor.AddLog("", false, strings.NewReader(file1), bufio.MaxScanTokenSize)
 			processor.Crank()
 
@@ -39,11 +44,6 @@ var _ = Describe("processor integration test", func() {
 
 	Context("when processing a single file", func() {
 		It("returns correctly ordered content", func() {
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, nilRegex, 0)
-			result := &strings.Builder{}
-			processor.SetWriter(result)
-			processor.SetPalette(noopPalette)
-
 			file1 := `[fine 2015/11/19 08:52:39.504 PST  line1
 
 [fine 2015/11/19 08:52:39.505 PST  line2
@@ -65,11 +65,6 @@ var _ = Describe("processor integration test", func() {
 
 	Context("when processing a single file with incorrectly ordered lines", func() {
 		It("returns correctly ordered content", func() {
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, nilRegex, 0)
-			result := &strings.Builder{}
-			processor.SetWriter(result)
-			processor.SetPalette(noopPalette)
-
 			file1 := `[fine 2015/11/19 08:52:39.506 GMT  line2
 
 [fine 2015/11/19 08:52:39.506 GMT  line3
@@ -100,11 +95,6 @@ var _ = Describe("processor integration test", func() {
 
 	Context("when processing multiple files with dates", func() {
 		It("returns correctly ordered content", func() {
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, nilRegex, 0)
-			result := &strings.Builder{}
-			processor.SetWriter(result)
-			processor.SetPalette(noopPalette)
-
 			file1 := `[fine 2015/11/19 08:52:39.504 PST  line1
 
 [fine 2015/11/19 08:52:39.506 PST  line2`
@@ -125,11 +115,6 @@ var _ = Describe("processor integration test", func() {
 
 	Context("when processing multiple files with undated lines", func() {
 		It("returns correctly ordered content", func() {
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, nilRegex, 0)
-			result := &strings.Builder{}
-			processor.SetWriter(result)
-			processor.SetPalette(noopPalette)
-
 			file1 := `[fine 2015/11/19 08:52:39.504 PST  line1
 SomeException
   at foo.com
@@ -160,7 +145,8 @@ AnotherException
 
 	Context("when limiting output by timestamp", func() {
 		It("returns correctly ordered content", func() {
-			processor := mergedlog.NewProcessor(1447951959505000000, 1447951959506000000, nilRegex, nilRegex, 0)
+			logChannel := make(chan *mergedlog.LogLine)
+			processor := mergedlog.NewProcessor(logChannel, 1447951959505000000, 1447951959506000000, nilRegex, nilRegex, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
 			processor.SetPalette(noopPalette)
@@ -192,7 +178,8 @@ AnotherException
 			f2 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("#" + s + "#") }
 			testPalette[0] = mergedlog.ColorFn{f1, f2, f1}
 
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex, nilRegex, 0)
+			logChannel := make(chan *mergedlog.LogLine)
+			processor := mergedlog.NewProcessor(logChannel, 0, mergedlog.MAX_INT, regex, nilRegex, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
 			processor.SetPalette(testPalette)
@@ -223,7 +210,8 @@ SomeException
 			f3 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("%" + s + "%") }
 			testPalette[0] = mergedlog.ColorFn{f1, f2, f3}
 
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex1, regex2, 0)
+			logChannel := make(chan *mergedlog.LogLine)
+			processor := mergedlog.NewProcessor(logChannel, 0, mergedlog.MAX_INT, regex1, regex2, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
 			processor.SetPalette(testPalette)
@@ -252,7 +240,8 @@ SomeException line1
 			f2 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("#" + s + "#") }
 			testPalette[0] = mergedlog.ColorFn{f1, f2, f1}
 
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex, nilRegex, 0)
+			logChannel := make(chan *mergedlog.LogLine)
+			processor := mergedlog.NewProcessor(logChannel, 0, mergedlog.MAX_INT, regex, nilRegex, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
 			processor.SetPalette(testPalette)
@@ -288,42 +277,34 @@ SomeException
 	Context("when grepping across multiple files with wide ranging timestamps", func() {
 		It("returns log entry from all files", func() {
 			regex := mergedlog.MakeGrepRegex("Exception")
-			testPalette := make([]mergedlog.ColorFn, 1)
 			f1 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted(s) }
-			f2 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("#" + s + "#") }
-			testPalette[0] = mergedlog.ColorFn{f1, f2, f1}
+			colorFns := mergedlog.ColorFn{f1, f1, f1}
 
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex, nilRegex, 0)
+			logChannel := make(chan *mergedlog.LogLine, 20)
+			processor := mergedlog.NewProcessor(logChannel, 0, mergedlog.MAX_INT, regex, nilRegex, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
-			processor.SetPalette(testPalette)
+			processor.FileCount = 3
 			mergedlog.FLUSH_BATCH_SIZE = 0
 
-			file1 := `[info 2015/11/19 08:00:00.000 PST  line1-1 Exception
-[info 2015/11/19 08:01:00.000 PST  line1-2
-[info 2015/11/19 08:02:00.000 PST  line1-3
-[info 2015/11/19 08:03:00.000 PST  line1-4
-[info 2015/11/19 08:04:00.000 PST  line1-5 Exception`
+			logChannel <- &mergedlog.LogLine{UTime: 10, Text: makeSpan("10 line-0-1 Exception"), FileIndex: 0, Color: colorFns}
+			logChannel <- &mergedlog.LogLine{UTime: 50, Text: makeSpan("50 line-0-5 Exception"), FileIndex: 0, Color: colorFns}
+			logChannel <- &mergedlog.LogLine{UTime: 60, Text: makeSpan("60 line-0-6 Exception"), FileIndex: 0, Color: colorFns}
+			logChannel <- &mergedlog.LogLine{UTime: 11, Text: makeSpan("11 line-1-1 Exception"), FileIndex: 1, Color: colorFns}
+			logChannel <- &mergedlog.LogLine{UTime: 12, Text: makeSpan("12 line-2-1 Exception"), FileIndex: 2, Color: colorFns}
+			logChannel <- &mergedlog.LogLine{UTime: 90, Text: makeSpan("90 line-2-9 Exception"), FileIndex: 2, Color: colorFns}
+			logChannel <- &mergedlog.LogLine{UTime: 70, Text: makeSpan("70 line-0-7 Exception"), FileIndex: 0, Color: colorFns}
 
-			file2 := `[info 2015/11/19 08:00:01.000 PST  line2-1 Exception
-[info 2015/11/19 08:01:01.000 PST  line2-2
-[info 2015/11/19 08:02:01.000 PST  line2-3`
-
-			file3 := `[info 2015/11/19 08:00:01.000 PST  line3-1
-[info 2015/11/19 08:01:01.000 PST  line3-2
-[info 2015/11/19 08:02:01.000 PST  line3-3
-[info 2015/11/19 08:05:01.000 PST  line3-4 Exception`
-
-			processor.AddLog("", false, strings.NewReader(file1), bufio.MaxScanTokenSize)
-			processor.AddLog("", false, strings.NewReader(file2), bufio.MaxScanTokenSize)
-			processor.AddLog("", false, strings.NewReader(file3), bufio.MaxScanTokenSize)
 			processor.Crank()
 
 			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
-				"[] [info 2015/11/19 08:00:00.000 PST  line1-1 #Exception#",
-				"[] [info 2015/11/19 08:00:01.000 PST  line2-1 #Exception#",
-				"[] [info 2015/11/19 08:04:00.000 PST  line1-5 #Exception#",
-				"[] [info 2015/11/19 08:05:01.000 PST  line3-4 #Exception#",
+				"[] 10 line-0-1 Exception",
+				"[] 11 line-1-1 Exception",
+				"[] 12 line-2-1 Exception",
+				"[] 50 line-0-5 Exception",
+				"[] 60 line-0-6 Exception",
+				"[] 70 line-0-7 Exception",
+				"[] 90 line-2-9 Exception",
 			}))
 		})
 	})
@@ -336,7 +317,8 @@ SomeException
 			f2 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("#" + s + "#") }
 			testPalette[0] = mergedlog.ColorFn{f1, f1, f2}
 
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, regex, 0)
+			logChannel := make(chan *mergedlog.LogLine)
+			processor := mergedlog.NewProcessor(logChannel, 0, mergedlog.MAX_INT, nilRegex, regex, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
 			processor.SetPalette(testPalette)

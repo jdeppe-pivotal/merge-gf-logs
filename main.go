@@ -45,7 +45,7 @@ func main() {
 	var rangeStop = mergedlog.MAX_INT
 
 	if *rangeStartStr != "" {
-		t, err := time.Parse(mergedlog.StampFormat, *rangeStartStr)
+		t, err := time.Parse(mergedlog.STAMP_FORMAT, *rangeStartStr)
 		if err != nil {
 			log.Fatalf("Unable to parse '%s' as timestamp", *rangeStartStr)
 		}
@@ -61,7 +61,7 @@ func main() {
 	}
 
 	if *rangeStopStr != "" {
-		t, err := time.Parse(mergedlog.StampFormat, *rangeStopStr)
+		t, err := time.Parse(mergedlog.STAMP_FORMAT, *rangeStopStr)
 		if err != nil {
 			log.Fatalf("Unable to parse '%s' as timestamp", *rangeStopStr)
 		}
@@ -94,7 +94,8 @@ func main() {
 		highlightRegex = regexp.MustCompile("(.*)(" + *highlight + ")(.*)")
 	}
 
-	processor := mergedlog.NewProcessor(rangeStart, rangeStop, grepRegex, highlightRegex, *debugLevel)
+	logChannel := make(chan *mergedlog.LogLine)
+	processor := mergedlog.NewProcessor(logChannel, rangeStart, rangeStop, grepRegex, highlightRegex, *debugLevel)
 
 	if userColor != "off" {
 		if userColor == "light" {
