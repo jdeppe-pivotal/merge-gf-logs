@@ -34,7 +34,7 @@ func main() {
 	rangeStartStr := flag.String("start", "", "start timestamp of range of logs. Format: '2018/01/25 19:09:36.949 UTC'")
 	rangeStopStr := flag.String("stop", "", "end timestamp of range of logs. Format: '2018/01/25 19:09:36.949 UTC'")
 	debugLevel := flag.Int("debug", 0, "debug level - 0=off 1=verbose 2=very verbose")
-	fullAlias := flag.Bool("full-alias", false, "use the full name as alias")
+	fullAlias := flag.Bool("full-alias", true, "use the full name as alias")
 	noLogRoll := flag.Bool("no-roll", false, "do not attempt to use the log rolling suffix numbers to associate different files with the same system (color)")
 	grep := flag.StringP("grep", "g", "", "only process and display lines containing the regex")
 	highlight := flag.StringP("highlight", "h", "", "highlight text that matches the regex")
