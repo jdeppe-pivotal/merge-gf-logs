@@ -93,6 +93,34 @@ var _ = Describe("processor integration test", func() {
 		})
 	})
 
+	Context("when processing a single file with chunks containing blank lines", func() {
+		It("returns correctly ordered content", func() {
+			file1 := `[info 2015/11/19 08:52:39.506 GMT line1
+Members with potentially new data:
+[
+  Name: server2
+]
+Use gfsh.
+
+[info 2015/11/19 08:52:39.506 GMT line2
+`
+
+			processor.AddLog("", false, strings.NewReader(file1), bufio.MaxScanTokenSize)
+			processor.Crank()
+
+			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
+				"[] [info 2015/11/19 08:52:39.506 GMT line1",
+				"[] Members with potentially new data:",
+				"[] [",
+				"[]   Name: server2",
+				"[] ]",
+				"[] Use gfsh.",
+				"[] ",
+				"[] [info 2015/11/19 08:52:39.506 GMT line2",
+			}))
+		})
+	})
+
 	Context("when processing multiple files with dates", func() {
 		It("returns correctly ordered content", func() {
 			file1 := `[fine 2015/11/19 08:52:39.504 PST  line1

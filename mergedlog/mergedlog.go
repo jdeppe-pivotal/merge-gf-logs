@@ -220,14 +220,16 @@ func (ml *MergedLog) FlushLogs(highestStamp int64, maxLogNameLength int) {
 	}
 }
 
+var endOfLine = regexp.MustCompile(`\n\[\w`)
+
 func ScanLogEntries(data []byte, atEOF bool) (advance int, token []byte, err error) {
 	if atEOF && len(data) == 0 {
 		return 0, nil, nil
 	}
 
-	if i := bytes.Index(data, []byte("\n[")); i >= 0 {
+	if loc := endOfLine.FindIndex(data); loc != nil {
 		// We have a full newline-terminated line.
-		return i + 1, bytes.TrimRight(data[0:i], "\r"), nil
+		return loc[0] + 1, bytes.TrimRight(data[0:loc[0]], "\r"), nil
 	}
 
 	// If we're at EOF, we have a final, non-terminated line. Return it,
