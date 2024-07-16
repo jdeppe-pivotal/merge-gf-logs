@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// Process a [tag:]file input into its constituent parts. In addition, a filename will be parsed to try and
-// determine if it is a rolled filename. Specifically if it ends in a format like "-01-23.log". The returned values
-// will be: original name, shorter name, tag
+// ProcessFilename processes a [tag:]file input into its constituent parts. In addition, a filename
+// will be parsed to try and determine if it is a rolled filename. Specifically if it ends in a
+// format like "-01-23.log". The returned values will be: original name, shorter name, tag
 func ProcessFilename(name string, useFullName bool) (string, string, *string) {
 	var fullName string
 	var shorterName string
