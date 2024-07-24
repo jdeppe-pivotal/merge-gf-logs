@@ -97,6 +97,8 @@ func (this *Processor) AddLog(alias string, rolled bool, reader io.Reader, maxBu
 func (this *Processor) Crank() {
 	var oldestStampSeen = MAX_INT
 	var lineCount = 0
+	var filesCompleted = 0
+	//var totalLines = 0
 	logsSeen := make([]int, this.FileCount)
 
 	go func() {
@@ -105,6 +107,11 @@ func (this *Processor) Crank() {
 	}()
 
 	for line := range this.logChannel {
+		if line.FileIndex == -1 {
+			filesCompleted += 1
+			continue
+		}
+
 		lineCount++
 
 		this.aggLog.Insert(line)
@@ -120,7 +127,7 @@ func (this *Processor) Crank() {
 			for i, _ := range logsSeen {
 				seenAllLogs += logsSeen[i]
 			}
-			if seenAllLogs < this.FileCount {
+			if seenAllLogs+filesCompleted < this.FileCount {
 				continue
 			}
 

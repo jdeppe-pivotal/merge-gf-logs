@@ -140,6 +140,11 @@ func (lf *LogFile) Process(logChannel chan<- *LogLine) {
 		}
 	}
 
+	endToken := &LogLine{
+		FileIndex: -1,
+	}
+	logChannel <- endToken
+
 	lf.waitGroup.Done()
 }
 
