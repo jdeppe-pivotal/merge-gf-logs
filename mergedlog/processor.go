@@ -95,11 +95,9 @@ func (this *Processor) AddLog(alias string, rolled bool, reader io.Reader, maxBu
 }
 
 func (this *Processor) Crank() {
-	var oldestStampSeen = MAX_INT
 	var lineCount = 0
 	var filesCompleted = 0
-	//var totalLines = 0
-	logsSeen := make([]int, this.FileCount)
+	logsSeen := make([]int64, this.FileCount)
 
 	go func() {
 		this.waitGroup.Wait()
@@ -113,19 +111,19 @@ func (this *Processor) Crank() {
 		}
 
 		lineCount++
-
 		this.aggLog.Insert(line)
-
-		if line.UTime < oldestStampSeen {
-			oldestStampSeen = line.UTime
-		}
-
-		logsSeen[line.FileIndex] = 1
+		logsSeen[line.FileIndex] = line.UTime
 
 		if lineCount > FLUSH_BATCH_SIZE {
 			seenAllLogs := 0
+			oldestStampSeen := MAX_INT
 			for i, _ := range logsSeen {
-				seenAllLogs += logsSeen[i]
+				if logsSeen[i] > 0 {
+					seenAllLogs++
+					if logsSeen[i] < oldestStampSeen {
+						oldestStampSeen = logsSeen[i]
+					}
+				}
 			}
 			if seenAllLogs+filesCompleted < this.FileCount {
 				continue

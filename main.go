@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/pprof"
 	"time"
 )
 
@@ -38,6 +39,7 @@ func main() {
 	noLogRoll := flag.Bool("no-roll", false, "do not attempt to use the log rolling suffix numbers to associate different files with the same system (color)")
 	grep := flag.StringP("grep", "g", "", "only process and display lines containing the regex")
 	highlight := flag.StringP("highlight", "h", "", "highlight text that matches the regex")
+	profFile := flag.String("prof", "", "write profiling info to a file")
 
 	flag.Parse()
 
@@ -94,7 +96,7 @@ func main() {
 		highlightRegex = regexp.MustCompile("(.*)(" + *highlight + ")(.*)")
 	}
 
-	logChannel := make(chan *mergedlog.LogLine)
+	logChannel := make(chan *mergedlog.LogLine, 1_000_000)
 	processor := mergedlog.NewProcessor(logChannel, rangeStart, rangeStop, grepRegex, highlightRegex, *debugLevel)
 
 	if userColor != "off" {
@@ -151,6 +153,16 @@ func main() {
 		defer f.Close()
 
 		processor.AddLog(alias, rolled, f, *maxBuffer)
+	}
+
+	if *profFile != "" {
+		// Start profiling
+		f, err := os.Create(*profFile)
+		if err != nil {
+			panic(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	processor.Crank()

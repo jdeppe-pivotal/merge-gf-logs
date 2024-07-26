@@ -160,46 +160,41 @@ func (ml *MergedLog) SetWriter(writer io.Writer) {
 }
 
 func (ml *MergedLog) Insert(line *LogLine) {
-	if ml.lastLine == nil {
-		if ml.AggLog.Len() == 0 {
-			ml.lastLine = ml.AggLog.PushFront(line)
-			return
-		}
-		ml.lastLine = ml.AggLog.Front()
-	}
-
-	var insertBefore *list.Element
+	var x *LogLine
 	// Skip back if necessary
 	for ml.lastLine != nil {
-		x := ml.lastLine.Value.(*LogLine)
+		x = ml.lastLine.Value.(*LogLine)
 		if line.UTime >= x.UTime {
 			break
 		}
-		insertBefore = ml.lastLine
 		ml.lastLine = ml.lastLine.Prev()
 	}
 
+	if ml.lastLine == nil {
+		ml.lastLine = ml.AggLog.PushFront(line)
+		return
+	}
+
+	var isInsertBefore = false
 	for ; ml.lastLine != nil; ml.lastLine = ml.lastLine.Next() {
-		x := ml.lastLine.Value.(*LogLine)
+		x = ml.lastLine.Value.(*LogLine)
 		if line.UTime < x.UTime {
+			isInsertBefore = true
 			break
 		}
 	}
 
 	if ml.lastLine == nil {
-		if insertBefore != nil {
-			ml.lastLine = ml.AggLog.InsertBefore(line, insertBefore)
-		} else {
-			ml.lastLine = ml.AggLog.PushBack(line)
-		}
-	} else {
+		ml.lastLine = ml.AggLog.PushBack(line)
+	} else if isInsertBefore {
 		ml.lastLine = ml.AggLog.InsertBefore(line, ml.lastLine)
+	} else {
+		ml.lastLine = ml.AggLog.InsertAfter(line, ml.lastLine)
 	}
-
-	return
 }
 
 func (ml *MergedLog) FlushLogs(highestStamp int64, maxLogNameLength int) {
+	linesLogged := 0
 	for e := ml.AggLog.Front(); e != nil; e = ml.AggLog.Front() {
 		entry, _ := e.Value.(*LogLine)
 		if entry.UTime < highestStamp {
@@ -219,10 +214,17 @@ func (ml *MergedLog) FlushLogs(highestStamp int64, maxLogNameLength int) {
 			}
 
 			ml.AggLog.Remove(e)
+			linesLogged++
 		} else {
 			break
 		}
 	}
+}
+
+func formatUTime(t int64) string {
+	sec := t / 1e9
+	nano := t - (sec * 1e9)
+	return time.Unix(sec, nano).Format(STAMP_FORMAT)
 }
 
 var endOfLine = regexp.MustCompile(`\n\[\w`)

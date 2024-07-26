@@ -123,18 +123,17 @@ Use gfsh.
 
 	Context("when processing multiple files with dates", func() {
 		It("returns correctly ordered content", func() {
-			file1 := `[fine 2015/11/19 08:52:39.504 PST  line1
-
-[fine 2015/11/19 08:52:39.506 PST  line2`
+			file1 := `[fine 2015/11/19 08:52:39.504 PST  line1`
 			file2 := `[fine 2015/11/19 08:52:39.505 PST  line3`
+			file3 := `[fine 2015/11/19 08:52:39.506 PST  line2`
 
 			processor.AddLog("", false, strings.NewReader(file1), bufio.MaxScanTokenSize)
 			processor.AddLog("", false, strings.NewReader(file2), bufio.MaxScanTokenSize)
+			processor.AddLog("", false, strings.NewReader(file3), bufio.MaxScanTokenSize)
 			processor.Crank()
 
 			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
 				"[] [fine 2015/11/19 08:52:39.504 PST  line1",
-				"[] ",
 				"[] [fine 2015/11/19 08:52:39.505 PST  line3",
 				"[] [fine 2015/11/19 08:52:39.506 PST  line2",
 			}))
