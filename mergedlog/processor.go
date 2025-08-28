@@ -2,13 +2,14 @@ package mergedlog
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"regexp"
-	"sync"
 )
 
 type Processor struct {
-	aggLog           *MergedLog
+	writer           io.Writer
+	logFiles         []*LogFile
 	rangeStart       int64
 	rangeStop        int64
 	maxLogNameLength int
@@ -18,8 +19,6 @@ type Processor struct {
 	debugLevel       int
 	grepRegex        *regexp.Regexp
 	highlightRegex   *regexp.Regexp
-	logChannel       chan *LogLine
-	waitGroup        *sync.WaitGroup
 	FileCount        int
 }
 
@@ -37,14 +36,13 @@ type Span []any
 
 type LogEntry []Span
 
-var FLUSH_BATCH_SIZE = 20
 var gfeLogLineRE = regexp.MustCompile(`^\[\w+ (([^ ]* ){3}).*`)
 
 const STAMP_FORMAT = "2006/01/02 15:04:05.000 MST"
 
-func NewProcessor(logChannnel chan *LogLine, rangeStart, rangeStop int64, grepRegex, highlightRegex *regexp.Regexp, debugLevel int) *Processor {
+func NewProcessor(rangeStart, rangeStop int64, grepRegex, highlightRegex *regexp.Regexp, debugLevel int) *Processor {
 	processor := &Processor{}
-	processor.aggLog = NewMergedLog()
+	processor.logFiles = make([]*LogFile, 0)
 	processor.rangeStart = rangeStart
 	processor.rangeStop = rangeStop
 	processor.aliasColorMap = make(map[string]int)
@@ -53,8 +51,6 @@ func NewProcessor(logChannnel chan *LogLine, rangeStart, rangeStop int64, grepRe
 	processor.debugLevel = debugLevel
 	processor.grepRegex = grepRegex
 	processor.highlightRegex = highlightRegex
-	processor.logChannel = logChannnel
-	processor.waitGroup = &sync.WaitGroup{}
 
 	return processor
 }
@@ -78,8 +74,8 @@ func (this *Processor) AddLog(alias string, rolled bool, reader io.Reader, maxBu
 		Color:          this.palette[this.aliasColorMap[alias]],
 		grepRegex:      this.grepRegex,
 		highlightRegex: this.highlightRegex,
-		waitGroup:      this.waitGroup,
 		index:          this.FileCount,
+		logChannel:     make(chan *LogLine, 100),
 	}
 	this.FileCount++
 
@@ -90,55 +86,54 @@ func (this *Processor) AddLog(alias string, rolled bool, reader io.Reader, maxBu
 		this.maxLogNameLength = len(logFile.Alias)
 	}
 
-	this.waitGroup.Add(1)
-	go logFile.Process(this.logChannel)
+	this.logFiles = append(this.logFiles, &logFile)
+	go logFile.Process()
+}
+
+func (p *Processor) SetFormat(maxNameLen int) {
+	for _, logFile := range p.logFiles {
+		logFile.SetFormat(maxNameLen)
+	}
 }
 
 func (this *Processor) Crank() {
-	var lineCount = 0
-	var filesCompleted = 0
-	logsSeen := make([]int64, this.FileCount)
+	var oldestTimestamp int64
+	var idx int
+	var line *LogLine
 
-	go func() {
-		this.waitGroup.Wait()
-		close(this.logChannel)
-	}()
-
-	for line := range this.logChannel {
-		if line.FileIndex == -1 {
-			filesCompleted += 1
-			continue
+	for {
+		idx = -1
+		oldestTimestamp = MAX_INT
+		for i, logFile := range this.logFiles {
+			if logFile.Peek().UTime < oldestTimestamp {
+				idx = i
+				oldestTimestamp = logFile.Peek().UTime
+			}
 		}
 
-		lineCount++
-		this.aggLog.Insert(line)
-		logsSeen[line.FileIndex] = line.UTime
+		if idx < 0 {
+			break
+		}
 
-		if lineCount > FLUSH_BATCH_SIZE {
-			seenAllLogs := 0
-			oldestStampSeen := MAX_INT
-			for i, _ := range logsSeen {
-				if logsSeen[i] > 0 {
-					seenAllLogs++
-					if logsSeen[i] < oldestStampSeen {
-						oldestStampSeen = logsSeen[i]
-					}
+		line = this.logFiles[idx].Take()
+
+		for _, logEntry := range line.Text {
+			fmt.Fprintf(this.writer, this.logFiles[idx].Format, "", line.Color.Normal(line.Alias))
+			for _, span := range logEntry {
+				switch s := span.(type) {
+				case Highlighted:
+					fmt.Fprint(this.writer, span)
+				case string:
+					fmt.Fprint(this.writer, line.Color.Normal(s))
 				}
 			}
-			if seenAllLogs+filesCompleted < this.FileCount {
-				continue
-			}
-
-			this.aggLog.FlushLogs(oldestStampSeen, this.maxLogNameLength)
-			oldestStampSeen = MAX_INT
-			lineCount = 0
-			for i, _ := range logsSeen {
-				logsSeen[i] = 0
-			}
+			fmt.Fprintln(this.writer)
 		}
 	}
 
-	this.aggLog.FlushLogs(MAX_INT, this.maxLogNameLength)
+	if w, ok := this.writer.(*bufio.Writer); ok {
+		w.Flush()
+	}
 }
 
 func (this *Processor) SetPalette(palette []ColorFn) {
@@ -146,5 +141,5 @@ func (this *Processor) SetPalette(palette []ColorFn) {
 }
 
 func (this *Processor) SetWriter(writer io.Writer) {
-	this.aggLog.SetWriter(writer)
+	this.writer = writer
 }

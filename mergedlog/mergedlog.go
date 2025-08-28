@@ -3,15 +3,11 @@ package mergedlog
 import (
 	"bufio"
 	"bytes"
-	"container/list"
 	"fmt"
-	"io"
 	"log"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -23,33 +19,46 @@ type LogFile struct {
 	RangeStop      int64
 	grepRegex      *regexp.Regexp
 	highlightRegex *regexp.Regexp
-	waitGroup      *sync.WaitGroup
 	index          int
+	logChannel     chan *LogLine
+	peek           *LogLine
+	Format         string
 }
 
 type LogLine struct {
-	Alias     string
-	UTime     int64
-	Text      LogEntry
-	Color     ColorFn
-	FileIndex int
-}
-
-type MergedLog struct {
-	AggLog   *list.List
-	lastLine *list.Element
-	writer   io.Writer
+	Alias string
+	UTime int64
+	Text  LogEntry
+	Color ColorFn
 }
 
 const MAX_INT = int64(^uint64(0) >> 1)
 
-func (lf *LogFile) Process(logChannel chan<- *LogLine) {
+func (lf *LogFile) Peek() *LogLine {
+	if lf.peek == nil {
+		lf.Take()
+	}
+	return lf.peek
+}
+
+func (lf *LogFile) Take() *LogLine {
+	taken := lf.peek
+	lf.peek = <-lf.logChannel
+	return taken
+}
+
+func (lf *LogFile) SetFormat(maxNameSize int) {
+	lf.Format = "%" + strconv.Itoa(len(lf.Alias)-maxNameSize) + "s[%s] "
+}
+
+func (lf *LogFile) Process() {
 	lineCount := 0
 	var grepMatch []string
+	var logChunk string
 
 	for {
 		if lf.Scanner.Scan() {
-			logChunk := lf.Scanner.Text()
+			logChunk = lf.Scanner.Text()
 
 			matches := gfeLogLineRE.FindStringSubmatch(logChunk)
 			if matches == nil {
@@ -73,7 +82,7 @@ func (lf *LogFile) Process(logChannel chan<- *LogLine) {
 						foundGrep = true
 						span = append(span, grepMatch[1],
 							lf.Color.Grep(grepMatch[2]),
-							grepMatch[3])
+							grepMatch[len(grepMatch)-1])
 					} else {
 						span = append(span, line)
 					}
@@ -124,14 +133,13 @@ func (lf *LogFile) Process(logChannel chan<- *LogLine) {
 			}
 
 			l := &LogLine{
-				Alias:     lf.Alias,
-				UTime:     t.UnixNano(),
-				Text:      logEntry,
-				Color:     lf.Color,
-				FileIndex: lf.index,
+				Alias: lf.Alias,
+				UTime: t.UnixNano(),
+				Text:  logEntry,
+				Color: lf.Color,
 			}
 
-			logChannel <- l
+			lf.logChannel <- l
 
 		} else if err := lf.Scanner.Err(); err != nil {
 			log.Fatalf("error reading '%s': %s", lf.Alias, err.Error())
@@ -141,90 +149,9 @@ func (lf *LogFile) Process(logChannel chan<- *LogLine) {
 	}
 
 	endToken := &LogLine{
-		FileIndex: -1,
+		UTime: MAX_INT,
 	}
-	logChannel <- endToken
-
-	lf.waitGroup.Done()
-}
-
-func NewMergedLog() *MergedLog {
-	return &MergedLog{
-		AggLog: list.New(),
-		writer: os.Stdout,
-	}
-}
-
-func (ml *MergedLog) SetWriter(writer io.Writer) {
-	ml.writer = writer
-}
-
-func (ml *MergedLog) Insert(line *LogLine) {
-	var x *LogLine
-	// Skip back if necessary
-	for ml.lastLine != nil {
-		x = ml.lastLine.Value.(*LogLine)
-		if line.UTime >= x.UTime {
-			break
-		}
-		ml.lastLine = ml.lastLine.Prev()
-	}
-
-	if ml.lastLine == nil {
-		ml.lastLine = ml.AggLog.PushFront(line)
-		return
-	}
-
-	var isInsertBefore = false
-	for ; ml.lastLine != nil; ml.lastLine = ml.lastLine.Next() {
-		x = ml.lastLine.Value.(*LogLine)
-		if line.UTime < x.UTime {
-			isInsertBefore = true
-			break
-		}
-	}
-
-	if ml.lastLine == nil {
-		ml.lastLine = ml.AggLog.PushBack(line)
-	} else if isInsertBefore {
-		ml.lastLine = ml.AggLog.InsertBefore(line, ml.lastLine)
-	} else {
-		ml.lastLine = ml.AggLog.InsertAfter(line, ml.lastLine)
-	}
-}
-
-func (ml *MergedLog) FlushLogs(highestStamp int64, maxLogNameLength int) {
-	linesLogged := 0
-	for e := ml.AggLog.Front(); e != nil; e = ml.AggLog.Front() {
-		entry, _ := e.Value.(*LogLine)
-		if entry.UTime < highestStamp {
-			format := "%" + strconv.Itoa(len(entry.Alias)-maxLogNameLength) + "s[%s] "
-
-			for _, logEntry := range entry.Text {
-				fmt.Fprintf(ml.writer, format, "", entry.Color.Normal(entry.Alias))
-				for _, span := range logEntry {
-					switch s := span.(type) {
-					case Highlighted:
-						fmt.Fprint(ml.writer, span)
-					case string:
-						fmt.Fprint(ml.writer, entry.Color.Normal(s))
-					}
-				}
-				fmt.Fprintln(ml.writer)
-			}
-
-			ml.AggLog.Remove(e)
-			linesLogged++
-		} else {
-			break
-		}
-	}
-}
-
-func formatUTime(t int64) string {
-	sec := t / 1e9
-	nano := t - (sec * 1e9)
-	return time.Unix(sec, nano).Format(STAMP_FORMAT)
+	lf.logChannel <- endToken
 }
 
 var endOfLine = regexp.MustCompile(`\n\[\w`)

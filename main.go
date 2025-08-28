@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	flag "github.com/spf13/pflag"
 	"log"
@@ -96,8 +97,8 @@ func main() {
 		highlightRegex = regexp.MustCompile("(.*)(" + *highlight + ")(.*)")
 	}
 
-	logChannel := make(chan *mergedlog.LogLine, 1_000_000)
-	processor := mergedlog.NewProcessor(logChannel, rangeStart, rangeStop, grepRegex, highlightRegex, *debugLevel)
+	processor := mergedlog.NewProcessor(rangeStart, rangeStop, grepRegex, highlightRegex, *debugLevel)
+	processor.SetWriter(bufio.NewWriterSize(os.Stdout, 65536))
 
 	if userColor != "off" {
 		if userColor == "light" {
@@ -128,6 +129,7 @@ func main() {
 	}
 
 	var alias string
+	var maxNameLen = 0
 	// Gather our files and set up a Scanner for each of them
 	for _, full := range filenameList {
 		var rolled bool
@@ -153,7 +155,12 @@ func main() {
 		defer f.Close()
 
 		processor.AddLog(alias, rolled, f, *maxBuffer)
+
+		if len(alias) > maxNameLen {
+			maxNameLen = len(alias)
+		}
 	}
+	processor.SetFormat(maxNameLen)
 
 	if *profFile != "" {
 		// Start profiling
