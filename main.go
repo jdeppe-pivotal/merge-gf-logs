@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	flag "github.com/spf13/pflag"
 	"log"
 	"merge-logs/mergedlog"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"regexp"
 	"runtime/pprof"
 	"time"
+
+	flag "github.com/spf13/pflag"
 )
 
 var userColor string
@@ -30,7 +31,7 @@ func init() {
 }
 
 func main() {
-	flag.StringVar(&userColor, "color", "dark", "ColorFn scheme to use: light, dark or off")
+	flag.StringVar(&userColor, "color", "dark", "ColorFn scheme to use: light, dark or none")
 	duration := flag.Int64("duration", mergedlog.MAX_INT, "duration (in seconds), relative to start or stop, to display")
 	maxBuffer := flag.Int("max-buffer", 1024*1024, "maximum size of buffer to use when scanning")
 	rangeStartStr := flag.String("start", "", "start timestamp of range of logs. Format: '2018/01/25 19:09:36.949 UTC'")
@@ -100,7 +101,18 @@ func main() {
 	processor := mergedlog.NewProcessor(rangeStart, rangeStop, grepRegex, highlightRegex, *debugLevel)
 	processor.SetWriter(bufio.NewWriterSize(os.Stdout, 65536))
 
-	if userColor != "off" {
+	if userColor == "none" {
+		palette = make([]mergedlog.ColorFn, 1)
+		noColor := func(x string) mergedlog.Highlighted {
+			return mergedlog.Highlighted(x)
+		}
+		palette[0] = mergedlog.ColorFn{
+			Normal:    noColor,
+			Grep:      noColor,
+			Highlight: noColor,
+		}
+		processor.SetPalette(palette)
+	} else {
 		if userColor == "light" {
 			// blackish
 			palette[0] = mergedlog.MakePaletteEntry("234")
