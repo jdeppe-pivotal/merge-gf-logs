@@ -12,17 +12,18 @@ import (
 )
 
 type LogFile struct {
-	Alias          string
-	Scanner        *bufio.Scanner
-	Color          ColorFn
-	RangeStart     int64
-	RangeStop      int64
-	grepRegex      *regexp.Regexp
-	highlightRegex *regexp.Regexp
-	index          int
-	logChannel     chan *LogLine
-	peek           *LogLine
-	Format         string
+	Alias           string
+	Scanner         *bufio.Scanner
+	Color           ColorFn
+	RangeStart      int64
+	RangeStop       int64
+	grepRegex       *regexp.Regexp
+	invertGrepRegex *regexp.Regexp
+	highlightRegex  *regexp.Regexp
+	index           int
+	logChannel      chan *LogLine
+	peek            *LogLine
+	Format          string
 }
 
 type LogLine struct {
@@ -54,6 +55,7 @@ func (lf *LogFile) SetFormat(maxNameSize int) {
 func (lf *LogFile) Process() {
 	lineCount := 0
 	var grepMatch []string
+	var invertGrepMatch []string
 	var logChunk string
 
 	for {
@@ -74,15 +76,20 @@ func (lf *LogFile) Process() {
 			logEntry := LogEntry{}
 
 			foundGrep := false
+			foundInvertedGrep := false
 			for _, line := range strings.Split(logChunk, "\n") {
+				//fmt.Printf("--->>> %d %s\n", i, line)
 				span := Span{}
 				if lf.grepRegex != nil {
 					grepMatch = lf.grepRegex.FindStringSubmatch(line)
 					if grepMatch != nil {
 						foundGrep = true
-						span = append(span, grepMatch[1],
-							lf.Color.Grep(grepMatch[2]),
-							grepMatch[len(grepMatch)-1])
+					}
+					span = append(span, line)
+				} else if lf.invertGrepRegex != nil {
+					invertGrepMatch = lf.invertGrepRegex.FindStringSubmatch(line)
+					if invertGrepMatch != nil {
+						foundInvertedGrep = true
 					} else {
 						span = append(span, line)
 					}
@@ -95,6 +102,10 @@ func (lf *LogFile) Process() {
 
 			// If we're grepping but didn't find anything in the whole log entry then move on
 			if lf.grepRegex != nil && !foundGrep {
+				continue
+			}
+			// Found something to ignore
+			if lf.invertGrepRegex != nil && foundInvertedGrep {
 				continue
 			}
 

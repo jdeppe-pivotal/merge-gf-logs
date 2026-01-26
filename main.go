@@ -40,6 +40,7 @@ func main() {
 	fullAlias := flag.Bool("full-alias", true, "use the full name as alias")
 	noLogRoll := flag.Bool("no-roll", false, "do not attempt to use the log rolling suffix numbers to associate different files with the same system (color)")
 	grep := flag.StringP("grep", "g", "", "only process and display lines containing the regex")
+	invertGrep := flag.StringP("invert-grep", "v", "", "exclude lines containing the regex")
 	highlight := flag.StringP("highlight", "h", "", "highlight text that matches the regex")
 	profFile := flag.String("prof", "", "write profiling info to a file")
 
@@ -93,12 +94,17 @@ func main() {
 		grepRegex = mergedlog.MakeGrepRegex(*grep)
 	}
 
+	var invertGrepRegex *regexp.Regexp
+	if *invertGrep != "" {
+		invertGrepRegex = mergedlog.MakeGrepRegex(*invertGrep)
+	}
+
 	var highlightRegex *regexp.Regexp
 	if *highlight != "" {
 		highlightRegex = regexp.MustCompile("(.*)(" + *highlight + ")(.*)")
 	}
 
-	processor := mergedlog.NewProcessor(rangeStart, rangeStop, grepRegex, highlightRegex, *debugLevel)
+	processor := mergedlog.NewProcessor(rangeStart, rangeStop, grepRegex, invertGrepRegex, highlightRegex, *debugLevel)
 	processor.SetWriter(bufio.NewWriterSize(os.Stdout, 65536))
 
 	if userColor == "none" {

@@ -2,11 +2,12 @@ package mergedlog_test
 
 import (
 	"bufio"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	"merge-logs/mergedlog"
 	"regexp"
 	"strings"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 // regex is nil
@@ -24,7 +25,7 @@ var _ = Describe("processor integration test", func() {
 	var result *strings.Builder
 
 	BeforeEach(func() {
-		processor = mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, nilRegex, 0)
+		processor = mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, nilRegex, nilRegex, 0)
 		processor.SetPalette(noopPalette)
 		result = &strings.Builder{}
 		processor.SetWriter(result)
@@ -146,7 +147,7 @@ AnotherException
 
 	Context("when limiting output by timestamp", func() {
 		It("returns correctly ordered content", func() {
-			processor := mergedlog.NewProcessor(1447951959505000000, 1447951959506000000, nilRegex, nilRegex, 0)
+			processor := mergedlog.NewProcessor(1447951959505000000, 1447951959506000000, nilRegex, nilRegex, nilRegex, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
 			processor.SetPalette(noopPalette)
@@ -176,10 +177,9 @@ AnotherException
 			regex := mergedlog.MakeGrepRegex("SomeException")
 			testPalette := make([]mergedlog.ColorFn, 1)
 			f1 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted(s) }
-			f2 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("#" + s + "#") }
-			testPalette[0] = mergedlog.ColorFn{f1, f2, f1}
+			testPalette[0] = mergedlog.ColorFn{f1, f1, f1}
 
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex, nilRegex, 0)
+			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex, nilRegex, nilRegex, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
 			processor.SetPalette(testPalette)
@@ -194,9 +194,36 @@ SomeException
 			processor.Crank()
 
 			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
-				"[] [info 2015/11/19 08:52:39.504 PST  line1 also has #SomeException# in it",
-				"[] #SomeException#",
+				"[] [info 2015/11/19 08:52:39.504 PST  line1 also has SomeException in it",
+				"[] SomeException",
 				"[]   at foo.com",
+			}))
+		})
+	})
+
+	Context("when invert grepping for text", func() {
+		It("does not return removed log entry", func() {
+			invertRegex := mergedlog.MakeGrepRegex("SomeException")
+			testPalette := make([]mergedlog.ColorFn, 1)
+			f1 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted(s) }
+			testPalette[0] = mergedlog.ColorFn{f1, f1, f1}
+
+			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, invertRegex, nilRegex, 0)
+			result := &strings.Builder{}
+			processor.SetWriter(result)
+			processor.SetPalette(testPalette)
+
+			file1 := `[info 2015/11/19 08:52:39.504 PST  line1 also has SomeException in it
+SomeException
+  at foo.com
+[info 2015/11/19 08:52:40.774 PST  line2`
+
+			processor.AddLog("", false, strings.NewReader(file1), bufio.MaxScanTokenSize)
+			processor.SetFormat(0)
+			processor.Crank()
+
+			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
+				"[] [info 2015/11/19 08:52:40.774 PST  line2",
 			}))
 		})
 	})
@@ -207,11 +234,10 @@ SomeException
 			regex2 := mergedlog.MakeGrepRegex("line1")
 			testPalette := make([]mergedlog.ColorFn, 1)
 			f1 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted(">" + s + "<") }
-			f2 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("#" + s + "#") }
 			f3 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("%" + s + "%") }
-			testPalette[0] = mergedlog.ColorFn{f1, f2, f3}
+			testPalette[0] = mergedlog.ColorFn{f1, f1, f3}
 
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex1, regex2, 0)
+			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex1, nilRegex, regex2, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
 			processor.SetPalette(testPalette)
@@ -226,8 +252,8 @@ SomeException line1
 			processor.Crank()
 
 			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
-				"[><] >[info 2015/11/19 08:52:39.504 PST  <%line1%> also has <#SomeException#> in <%line1%><",
-				"[><] ><#SomeException#> <%line1%><",
+				"[><] >[info 2015/11/19 08:52:39.504 PST  <%line1%> also has SomeException in <%line1%><",
+				"[><] >SomeException <%line1%><",
 				"[><] >  at foo.com<",
 			}))
 		})
@@ -238,10 +264,9 @@ SomeException line1
 			regex := mergedlog.MakeGrepRegex("SomeException")
 			testPalette := make([]mergedlog.ColorFn, 1)
 			f1 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted(s) }
-			f2 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("#" + s + "#") }
-			testPalette[0] = mergedlog.ColorFn{f1, f2, f1}
+			testPalette[0] = mergedlog.ColorFn{f1, f1, f1}
 
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex, nilRegex, 0)
+			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, regex, nilRegex, nilRegex, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
 			processor.SetPalette(testPalette)
@@ -264,13 +289,13 @@ SomeException
 			processor.Crank()
 
 			Expect(strings.Split(strings.TrimSpace(result.String()), "\n")).To(Equal([]string{
-				"[] [info 2015/11/19 08:42:39.504 PST  line3 may have #SomeException# in it",
+				"[] [info 2015/11/19 08:42:39.504 PST  line3 may have SomeException in it",
 				"[] ",
-				"[] [info 2015/11/19 08:52:39.504 PST  line1 also has #SomeException# in it",
-				"[] #SomeException#",
+				"[] [info 2015/11/19 08:52:39.504 PST  line1 also has SomeException in it",
+				"[] SomeException",
 				"[]   at foo.com",
 				"[] ",
-				"[] [info 2015/11/19 08:57:40.774 PST  line5 has #SomeException#",
+				"[] [info 2015/11/19 08:57:40.774 PST  line5 has SomeException",
 			}))
 		})
 	})
@@ -283,7 +308,7 @@ SomeException
 			f2 := func(s string) mergedlog.Highlighted { return mergedlog.Highlighted("#" + s + "#") }
 			testPalette[0] = mergedlog.ColorFn{f1, f1, f2}
 
-			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, regex, 0)
+			processor := mergedlog.NewProcessor(0, mergedlog.MAX_INT, nilRegex, nilRegex, regex, 0)
 			result := &strings.Builder{}
 			processor.SetWriter(result)
 			processor.SetPalette(testPalette)

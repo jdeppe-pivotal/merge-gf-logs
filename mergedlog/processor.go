@@ -18,6 +18,7 @@ type Processor struct {
 	palette          []ColorFn
 	debugLevel       int
 	grepRegex        *regexp.Regexp
+	invertGrepRegex  *regexp.Regexp
 	highlightRegex   *regexp.Regexp
 	FileCount        int
 }
@@ -40,7 +41,7 @@ var gfeLogLineRE = regexp.MustCompile(`^\[\w+ (([^ ]* ){3}).*`)
 
 const STAMP_FORMAT = "2006/01/02 15:04:05.000 MST"
 
-func NewProcessor(rangeStart, rangeStop int64, grepRegex, highlightRegex *regexp.Regexp, debugLevel int) *Processor {
+func NewProcessor(rangeStart, rangeStop int64, grepRegex, invertGrepRegex, highlightRegex *regexp.Regexp, debugLevel int) *Processor {
 	processor := &Processor{}
 	processor.logFiles = make([]*LogFile, 0)
 	processor.rangeStart = rangeStart
@@ -50,6 +51,7 @@ func NewProcessor(rangeStart, rangeStop int64, grepRegex, highlightRegex *regexp
 	processor.palette[0] = MakePaletteEntry("234")
 	processor.debugLevel = debugLevel
 	processor.grepRegex = grepRegex
+	processor.invertGrepRegex = invertGrepRegex
 	processor.highlightRegex = highlightRegex
 
 	return processor
@@ -73,6 +75,7 @@ func (this *Processor) AddLog(alias string, rolled bool, reader io.Reader, maxBu
 		RangeStop:      this.rangeStop,
 		Color:          this.palette[this.aliasColorMap[alias]],
 		grepRegex:      this.grepRegex,
+		invertGrepRegex: this.invertGrepRegex,
 		highlightRegex: this.highlightRegex,
 		index:          this.FileCount,
 		logChannel:     make(chan *LogLine, 100),
